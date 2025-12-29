@@ -186,6 +186,57 @@ export default function App() {
     return `Turn: ${currentPlayer}`;
   }, [outcome, currentPlayer]);
 
+  // Scoreboard state with persistence
+  const readScores = () => {
+    try {
+      const raw = localStorage.getItem('ttt-scores');
+      if (!raw) return { x: 0, o: 0, draws: 0 };
+      const parsed = JSON.parse(raw);
+      const x = Number.isFinite(parsed?.x) ? parsed.x : 0;
+      const o = Number.isFinite(parsed?.o) ? parsed.o : 0;
+      const d = Number.isFinite(parsed?.draws) ? parsed.draws : 0;
+      return { x, o, draws: d };
+    } catch {
+      return { x: 0, o: 0, draws: 0 };
+    }
+  };
+  const [scores, setScores] = useState(readScores);
+
+  // Persist scores when changed
+  useEffect(() => {
+    try {
+      localStorage.setItem('ttt-scores', JSON.stringify(scores));
+    } catch {
+      // ignore
+    }
+  }, [scores]);
+
+  // Increment appropriate score when a game ends
+  const prevOutcomeRef = useRef(null);
+  useEffect(() => {
+    if (!gameOver) return;
+    if (prevOutcomeRef.current === outcome) return;
+    prevOutcomeRef.current = outcome;
+    if (outcome === 'X') {
+      setScores((s) => ({ ...s, x: s.x + 1 }));
+    } else if (outcome === 'O') {
+      setScores((s) => ({ ...s, o: s.o + 1 }));
+    } else if (outcome === 'Draw') {
+      setScores((s) => ({ ...s, draws: s.draws + 1 }));
+    }
+  }, [gameOver, outcome]);
+
+  // PUBLIC_INTERFACE
+  function resetScores() {
+    /** Reset only the persistent scoreboard without altering current board state */
+    setScores({ x: 0, o: 0, draws: 0 });
+    try {
+      localStorage.setItem('ttt-scores', JSON.stringify({ x: 0, o: 0, draws: 0 }));
+    } catch {
+      // ignore
+    }
+  }
+
   // Prepare audio lazily on first user gesture
   useEffect(() => {
     const unlock = () => {
@@ -396,6 +447,31 @@ export default function App() {
               <span className="label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
             </button>
           </div>
+        </div>
+
+        {/* Scoreboard */}
+        <div className="scoreboard" role="group" aria-label="Scoreboard">
+          <div className="score" aria-live="polite">
+            <span className="score-label" aria-hidden="true">X</span>
+            <span className="score-value" aria-label="X score">{scores.x}</span>
+          </div>
+          <div className="score" aria-live="polite">
+            <span className="score-label" aria-hidden="true">O</span>
+            <span className="score-value" aria-label="O score">{scores.o}</span>
+          </div>
+          <div className="score" aria-live="polite">
+            <span className="score-label" aria-hidden="true">Draws</span>
+            <span className="score-value" aria-label="Draws score">{scores.draws}</span>
+          </div>
+          <button
+            type="button"
+            className="reset-scores"
+            onClick={resetScores}
+            aria-label="Reset scores"
+            title="Reset scores"
+          >
+            Reset Scores
+          </button>
         </div>
 
         <div
