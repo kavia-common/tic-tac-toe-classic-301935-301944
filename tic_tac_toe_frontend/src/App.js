@@ -83,6 +83,44 @@ export default function App() {
           {squares.map((value, idx) => {
             const label = `cell ${idx + 1}`;
             const disabled = Boolean(value) || gameOver;
+
+            // We use data attributes to help CSS hooks during tests; tests only check text/disabled.
+            const handleActivate = (e) => {
+              // Add a short "pressing" class to give immediate feedback for keyboard/mouse down
+              const btn = e.currentTarget;
+              btn.classList.add('square-pressing');
+              // Remove pressing state shortly after to let CSS transition do the rest
+              window.requestAnimationFrame(() => {
+                setTimeout(() => btn.classList.remove('square-pressing'), 120);
+              });
+            };
+
+            const handleKeyDown = (e) => {
+              if (disabled) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                // Prevent page scroll on Space
+                if (e.key === ' ') e.preventDefault();
+                handleActivate(e);
+              }
+            };
+
+            const onClick = (e) => {
+              if (disabled) return;
+              handleSquareClick(idx);
+              // If a mark was placed, briefly add a "placed" class for pop animation
+              // This runs after state update; the button will become disabled but DOM remains for animation.
+              const btn = e.currentTarget;
+              btn.classList.add('square-placed');
+              setTimeout(() => {
+                btn.classList.remove('square-placed');
+              }, 200);
+            };
+
+            const onMouseDown = (e) => {
+              if (disabled) return;
+              handleActivate(e);
+            };
+
             return (
               <button
                 key={idx}
@@ -91,7 +129,9 @@ export default function App() {
                 aria-label={label}
                 aria-disabled={disabled ? 'true' : 'false'}
                 disabled={disabled}
-                onClick={() => handleSquareClick(idx)}
+                onMouseDown={onMouseDown}
+                onKeyDown={handleKeyDown}
+                onClick={onClick}
               >
                 {value}
               </button>
