@@ -4,12 +4,14 @@ import drawSfx from './assets/draw.mp3';
 
 /**
  * Compute the winner of a tic-tac-toe board.
- * Returns:
- * - 'X' or 'O' if there is a winner
- * - 'Draw' if all cells are filled and no winner
- * - null if the game is still in progress
+ * Returns an object:
+ * - { winner: 'X'|'O', line: [a,b,c] } when there is a winner
+ * - { winner: 'Draw', line: null } when all filled without a winner
+ * - { winner: null, line: null } when game is in progress
+ *
+ * This allows the UI to highlight the exact winning line.
  */
-function evaluateBoard(squares) {
+function evaluateBoardDetailed(squares) {
   const lines = [
     [0, 1, 2],
     [3, 4, 5],
@@ -22,11 +24,23 @@ function evaluateBoard(squares) {
   ];
   for (const [a, b, c] of lines) {
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return squares[a];
+      return { winner: squares[a], line: [a, b, c] };
     }
   }
-  if (squares.every(Boolean)) return 'Draw';
-  return null;
+  if (squares.every(Boolean)) return { winner: 'Draw', line: null };
+  return { winner: null, line: null };
+}
+
+/**
+ * Backward-compatible simple evaluation for AI helpers and quick checks.
+ * Returns:
+ * - 'X' or 'O' if there is a winner
+ * - 'Draw' if all cells are filled and no winner
+ * - null if the game is still in progress
+ */
+function evaluateBoard(squares) {
+  const res = evaluateBoardDetailed(squares);
+  return res.winner;
 }
 
 /**
@@ -133,8 +147,10 @@ export default function App() {
   const audioReadyRef = useRef(false);
   const lastOutcomeRef = useRef(null);
 
-  // Determine game status
-  const outcome = useMemo(() => evaluateBoard(squares), [squares]);
+  // Determine game status with winning line info
+  const evaluation = useMemo(() => evaluateBoardDetailed(squares), [squares]);
+  const outcome = evaluation.winner;
+  const winningLine = evaluation.line; // null for draw or in-progress
   const gameOver = outcome === 'X' || outcome === 'O' || outcome === 'Draw';
 
   const currentPlayer = xIsNext ? 'X' : 'O';
@@ -350,6 +366,11 @@ export default function App() {
             const label = `cell ${idx + 1}`;
             const disabled = isCellDisabled(value);
 
+            const isWinningCell =
+              (outcome === 'X' || outcome === 'O') &&
+              Array.isArray(winningLine) &&
+              winningLine.includes(idx);
+
             const handleActivate = (e) => {
               if (disabled) return;
               const btn = e.currentTarget;
@@ -386,7 +407,8 @@ export default function App() {
               <button
                 key={idx}
                 type="button"
-                className="square"
+                className={`square${isWinningCell ? ' square-win' : ''}`}
+                data-winning={isWinningCell ? 'true' : 'false'}
                 aria-label={label}
                 aria-disabled={disabled ? 'true' : 'false'}
                 disabled={disabled}
