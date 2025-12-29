@@ -147,6 +147,31 @@ export default function App() {
   const audioReadyRef = useRef(false);
   const lastOutcomeRef = useRef(null);
 
+  // THEME state: initialize from localStorage or system preference
+  const getInitialTheme = () => {
+    const saved = (() => {
+      try {
+        return localStorage.getItem('ttt-theme');
+      } catch {
+        return null;
+      }
+    })();
+    if (saved === 'light' || saved === 'dark') return saved;
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return prefersDark ? 'dark' : 'light';
+  };
+  const [theme, setTheme] = useState(getInitialTheme);
+
+  // Apply theme to document element and persist
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('ttt-theme', theme);
+    } catch {
+      // ignore persistence errors
+    }
+  }, [theme]);
+
   // Determine game status with winning line info
   const evaluation = useMemo(() => evaluateBoardDetailed(squares), [squares]);
   const outcome = evaluation.winner;
@@ -307,6 +332,12 @@ export default function App() {
     </span>
   );
 
+  // PUBLIC_INTERFACE
+  function toggleTheme() {
+    /** Toggle light/dark theme and persist the choice */
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  }
+
   return (
     <div className="app-root">
       <main className="container" role="main">
@@ -342,16 +373,29 @@ export default function App() {
             )}
           </div>
 
-          <button
-            type="button"
-            className="sound-toggle"
-            onClick={toggleSound}
-            aria-label={soundOn ? 'Mute sounds' : 'Unmute sounds'}
-            title={soundOn ? 'Mute sounds' : 'Unmute sounds'}
-          >
-            <SoundIcon on={soundOn} />
-            <span className="label">{soundOn ? 'Sound on' : 'Sound off'}</span>
-          </button>
+          <div className="inline-actions" role="group" aria-label="App settings">
+            <button
+              type="button"
+              className="sound-toggle"
+              onClick={toggleSound}
+              aria-label={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+              title={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+            >
+              <SoundIcon on={soundOn} />
+              <span className="label">{soundOn ? 'Sound on' : 'Sound off'}</span>
+            </button>
+
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              <span className="icon" aria-hidden="true">{theme === 'dark' ? '🌙' : '☀️'}</span>
+              <span className="label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+            </button>
+          </div>
         </div>
 
         <div

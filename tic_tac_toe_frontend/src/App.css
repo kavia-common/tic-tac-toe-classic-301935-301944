@@ -10,6 +10,19 @@
   --border: #e5e7eb;
 }
 
+/* Dark theme variables using data attribute on documentElement */
+:root[data-theme="dark"] {
+  --bg: #0b1220;            /* deep slate/ink */
+  --surface: #111827;       /* elevated surface */
+  --text: #f3f4f6;          /* primary text on dark */
+  --muted: #cbd5e1;         /* muted text on dark */
+  --primary: #60a5fa;       /* slightly lighter primary for contrast */
+  --success: #22d3ee;       /* cyan accent slightly brighter */
+  --error: #f87171;
+  --ring: rgba(96, 165, 250, 0.45);
+  --border: #1f2937;        /* darker border */
+}
+
 *,
 *::before,
 *::after {
@@ -55,6 +68,13 @@ body {
   gap: 8px;
 }
 
+/* small grouping for right-side buttons */
+.inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* selectors group */
 .selectors {
   display: inline-flex;
@@ -71,6 +91,9 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px 10px;
+}
+:root[data-theme="dark"] .select {
+  background: #0f172a;
 }
 
 .select-label {
@@ -91,6 +114,11 @@ body {
   outline: none;
   transition: box-shadow 120ms ease, border-color 120ms ease;
 }
+:root[data-theme="dark"] .select select {
+  background: #0b1220;
+  color: var(--text);
+  border-color: var(--border);
+}
 
 .select select:focus {
   border-color: var(--primary);
@@ -110,12 +138,19 @@ body {
   cursor: pointer;
   transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
+:root[data-theme="dark"] .sound-toggle {
+  background: #0f172a;
+}
 
 .sound-toggle:hover {
   background: #eef2f7;
   border-color: var(--primary);
   box-shadow: 0 2px 10px rgba(17,24,39,0.06);
   transform: translateY(-1px);
+}
+:root[data-theme="dark"] .sound-toggle:hover {
+  background: #111827;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
 }
 
 .sound-toggle:focus-visible {
@@ -153,15 +188,24 @@ body {
   background: #f8fafc;
   color: var(--text);
 }
+:root[data-theme="dark"] .status {
+  background: #0f172a;
+}
 
 .status-win {
   border-color: var(--success);
   background: rgba(6, 182, 212, 0.08);
 }
+:root[data-theme="dark"] .status-win {
+  background: rgba(34, 211, 238, 0.12);
+}
 
 .status-draw {
   border-color: var(--primary);
   background: rgba(59, 130, 246, 0.08);
+}
+:root[data-theme="dark"] .status-draw {
+  background: rgba(96, 165, 250, 0.12);
 }
 
 /* 3x3 grid board */
@@ -190,12 +234,20 @@ body {
   user-select: none;
   will-change: transform;
 }
+:root[data-theme="dark"] .square {
+  background: #0f172a;
+  border-color: var(--border);
+}
 
 .square:hover:not(:disabled) {
   transform: translateY(-1px);
   background: #eef2f7;
   border-color: var(--primary);
   box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
+}
+:root[data-theme="dark"] .square:hover:not(:disabled) {
+  background: #111827;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
 }
 
 /* Press feedback for mouse and keyboard */
@@ -205,6 +257,11 @@ body {
   background: #eaf1fb;
   border-color: var(--primary);
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08) inset;
+}
+:root[data-theme="dark"] .square:active:not(:disabled),
+:root[data-theme="dark"] .square.square-pressing:not(:disabled) {
+  background: #0b1324;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4) inset;
 }
 
 /* Pop animation when a mark is placed */
@@ -222,6 +279,11 @@ body {
     background: #f1f5f9;
   }
 }
+:root[data-theme="dark"] @keyframes square-pop {
+  0% { background: #0b1324; }
+  70% { background: #0f172a; }
+  100% { background: #0f172a; }
+}
 
 .square.square-placed {
   animation: square-pop 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -232,6 +294,9 @@ body {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px var(--ring);
   background: #eef2ff;
+}
+:root[data-theme="dark"] .square:focus-visible {
+  background: #0f172a;
 }
 
 .square:disabled {
@@ -263,6 +328,10 @@ body {
   position: relative;
   animation: win-pulse 900ms ease-in-out infinite;
 }
+:root[data-theme="dark"] .square.square-win,
+:root[data-theme="dark"] .square[data-winning="true"] {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(34, 211, 238, 0.14));
+}
 
 /* a subtle glow */
 .square.square-win::after,
@@ -273,6 +342,10 @@ body {
   border-radius: 16px;
   pointer-events: none;
   box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.4), 0 8px 20px rgba(59, 130, 246, 0.18);
+}
+:root[data-theme="dark"] .square.square-win::after,
+:root[data-theme="dark"] .square[data-winning="true"]::after {
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.55), 0 8px 20px rgba(96, 165, 250, 0.28);
 }
 
 /* Do not show hover scale on disabled, but keep the glow visible */
@@ -295,16 +368,63 @@ body {
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, opacity 120ms ease;
   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.20);
 }
+:root[data-theme="dark"] .restart {
+  box-shadow: 0 6px 16px rgba(96, 165, 250, 0.30);
+}
 
 .restart:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 20px rgba(59, 130, 246, 0.24);
   opacity: 0.95;
 }
+:root[data-theme="dark"] .restart:hover {
+  box-shadow: 0 8px 20px rgba(96, 165, 250, 0.35);
+}
 
 .restart:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px var(--ring);
+}
+
+/* Theme toggle button - visually matches sound toggle */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.theme-toggle:hover {
+  background: #eef2f7;
+  border-color: var(--primary);
+  box-shadow: 0 2px 10px rgba(17,24,39,0.06);
+  transform: translateY(-1px);
+}
+.theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+.theme-toggle .icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  color: var(--text);
+}
+.theme-toggle .label {
+  user-select: none;
+}
+:root[data-theme="dark"] .theme-toggle {
+  background: #0f172a;
+}
+:root[data-theme="dark"] .theme-toggle:hover {
+  background: #111827;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
 }
 
 @media (max-width: 420px) {
