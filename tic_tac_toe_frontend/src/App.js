@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
+import drawSfx from './assets/draw.mp3';
 
 /**
  * Compute the winner of a tic-tac-toe board.
@@ -31,12 +32,24 @@ function evaluateBoard(squares) {
   return null;
 }
 
+/**
+ * A note on audio/autoplay:
+ * We create the Audio element lazily and "unlock" it on first user interaction
+ * (click/keydown) so that browsers allow playback. We also guard to play the
+ * draw sound only once per game by tracking last outcome.
+ */
 // PUBLIC_INTERFACE
 export default function App() {
   /** The 9 board cells; values are 'X', 'O', or null */
   const [squares, setSquares] = useState(Array(9).fill(null));
   /** True if it's X's turn, false for O's turn */
   const [xIsNext, setXIsNext] = useState(true);
+
+  // Sound state
+  const [soundOn, setSoundOn] = useState(true);
+  const audioRef = useRef(null);
+  const audioReadyRef = useRef(false);
+  const lastOutcomeRef = useRef(null);
 
   // Determine game status
   const outcome = useMemo(() => evaluateBoard(squares), [squares]);
@@ -49,6 +62,72 @@ export default function App() {
     if (outcome === 'Draw') return "It's a draw.";
     return `Turn: ${currentPlayer}`;
   }, [outcome, currentPlayer]);
+
+  // Prepare audio lazily on first user gesture
+  useEffect(() => {
+    const unlock = () => {
+      if (!audioRef.current) {
+        audioRef.current = new Audio(drawSfx);
+        audioRef.current.preload = 'auto';
+      }
+      // Attempt a silent play/pause to satisfy autoplay policies
+      const a = audioRef.current;
+      // some browsers require actual play to unlock; we'll catch promise errors silently
+      a.volume = 0;
+      const p = a.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          a.pause();
+          a.currentTime = 0;
+          a.volume = 1;
+          audioReadyRef.current = true;
+        }).catch(() => {
+          // If it fails, we'll still mark as ready and rely on next gesture when playing
+          a.pause();
+          a.currentTime = 0;
+          a.volume = 1;
+          audioReadyRef.current = true;
+        });
+      } else {
+        a.pause();
+        a.currentTime = 0;
+        a.volume = 1;
+        audioReadyRef.current = true;
+      }
+      // We only need to unlock once
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  // Play draw sound exactly once when transitioning into draw state
+  useEffect(() => {
+    if (outcome === 'Draw' && lastOutcomeRef.current !== 'Draw') {
+      lastOutcomeRef.current = 'Draw';
+      if (soundOn) {
+        const a = audioRef.current || new Audio(drawSfx);
+        audioRef.current = a;
+        // If not unlocked yet, this call will be triggered by the same interaction that finished the game
+        // but we still guard with catch to avoid unhandled promise rejections in tests/headless.
+        a.currentTime = 0;
+        const p = a.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {});
+        }
+      }
+    } else if (outcome !== 'Draw') {
+      // track other states so we can detect future transitions
+      lastOutcomeRef.current = outcome;
+    }
+  }, [outcome, soundOn]);
 
   // PUBLIC_INTERFACE
   function handleSquareClick(index) {
@@ -65,12 +144,36 @@ export default function App() {
     /** Reset the board to initial state */
     setSquares(Array(9).fill(null));
     setXIsNext(true);
+    // Allow a future draw event to trigger sound again
+    lastOutcomeRef.current = null;
   }
+
+  const toggleSound = () => setSoundOn((s) => !s);
+
+  // Helper to render a minimal icon without changing test-visible text
+  const SoundIcon = ({ on }) => (
+    <span className="icon" aria-hidden="true">
+      {on ? '🔊' : '🔇'}
+    </span>
+  );
 
   return (
     <div className="app-root">
       <main className="container" role="main">
         <h1 className="title">Tic-Tac-Toe</h1>
+
+        <div className="controls" aria-label="controls">
+          <button
+            type="button"
+            className="sound-toggle"
+            onClick={toggleSound}
+            aria-label={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+            title={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+          >
+            <SoundIcon on={soundOn} />
+            <span className="label">{soundOn ? 'Sound on' : 'Sound off'}</span>
+          </button>
+        </div>
 
         <div
           className={`status ${outcome === 'X' ? 'status-win' : outcome === 'O' ? 'status-win' : outcome === 'Draw' ? 'status-draw' : ''}`}

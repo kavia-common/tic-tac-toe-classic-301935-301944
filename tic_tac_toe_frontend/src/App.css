@@ -46,6 +46,52 @@ body {
   justify-items: center;
 }
 
+/* Simple inline controls row (e.g., sound toggle) */
+.controls {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.sound-toggle:hover {
+  background: #eef2f7;
+  border-color: var(--primary);
+  box-shadow: 0 2px 10px rgba(17,24,39,0.06);
+  transform: translateY(-1px);
+}
+
+.sound-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+.sound-toggle .icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  color: var(--text);
+}
+
+.sound-toggle .label {
+  user-select: none;
+}
+
 .title {
   margin: 0;
   font-size: 24px;
