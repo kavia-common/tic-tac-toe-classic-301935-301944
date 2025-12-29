@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import drawSfx from './assets/draw.mp3';
+// Lazy-loadable SFX imports (webpack will bundle, but we keep small size and reuse)
+/**
+ * clickSfx: short tap for valid human moves
+ * winSfx: pleasant chime for wins (not draws)
+ * Note: assets are small; we will preload Audio instances on first user interaction.
+ */
+import clickSfx from './assets/click.mp3';
+import winSfx from './assets/win.mp3';
 
 /**
  * Compute the winner of a tic-tac-toe board.
@@ -142,9 +150,21 @@ export default function App() {
   const [pendingAi, setPendingAi] = useState(false);
 
   // Sound state
-  const [soundOn, setSoundOn] = useState(true);
-  const audioRef = useRef(null);
+  const [soundOn, setSoundOn] = useState(() => {
+    try {
+      const v = localStorage.getItem('ttt-sound');
+      if (v === 'on') return true;
+      if (v === 'off') return false;
+    } catch {}
+    return true;
+  });
+
+  // One audio element per SFX to allow overlapping in rare cases and keep code simple.
+  const drawAudioRef = useRef(null);
+  const clickAudioRef = useRef(null);
+  const winAudioRef = useRef(null);
   const audioReadyRef = useRef(false);
+
   const lastOutcomeRef = useRef(null);
 
   // THEME state: initialize from localStorage or system preference
@@ -240,33 +260,63 @@ export default function App() {
   // Prepare audio lazily on first user gesture
   useEffect(() => {
     const unlock = () => {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(drawSfx);
-        audioRef.current.preload = 'auto';
+      // Create and preload audio elements if not present
+      if (!drawAudioRef.current) {
+        drawAudioRef.current = new Audio(drawSfx);
+        drawAudioRef.current.preload = 'auto';
       }
-      const a = audioRef.current;
-      a.volume = 0;
-      const p = a.play();
-      if (p && typeof p.then === 'function') {
-        p
-          .then(() => {
-            a.pause();
-            a.currentTime = 0;
-            a.volume = 1;
-            audioReadyRef.current = true;
-          })
-          .catch(() => {
-            a.pause();
-            a.currentTime = 0;
-            a.volume = 1;
-            audioReadyRef.current = true;
-          });
-      } else {
-        a.pause();
-        a.currentTime = 0;
-        a.volume = 1;
+      if (!clickAudioRef.current) {
+        clickAudioRef.current = new Audio(clickSfx);
+        clickAudioRef.current.preload = 'auto';
+      }
+      if (!winAudioRef.current) {
+        winAudioRef.current = new Audio(winSfx);
+        winAudioRef.current.preload = 'auto';
+      }
+
+      // Attempt a silent play to satisfy autoplay policies; then pause and reset.
+      const audios = [drawAudioRef.current, clickAudioRef.current, winAudioRef.current];
+
+      // Chain play attempts; any resolution marks ready. Use volume 0 to avoid audible blip.
+      const tryPrime = (audio) =>
+        new Promise((resolve) => {
+          try {
+            audio.volume = 0;
+            const p = audio.play();
+            if (p && typeof p.then === 'function') {
+              p
+                .then(() => {
+                  audio.pause();
+                  audio.currentTime = 0;
+                  audio.volume = 1;
+                  resolve();
+                })
+                .catch(() => {
+                  audio.pause();
+                  audio.currentTime = 0;
+                  audio.volume = 1;
+                  resolve();
+                });
+            } else {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.volume = 1;
+              resolve();
+            }
+          } catch {
+            try {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.volume = 1;
+            } catch {}
+            resolve();
+          }
+        });
+
+      Promise.all(audios.map(tryPrime)).finally(() => {
         audioReadyRef.current = true;
-      }
+      });
+
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
@@ -285,8 +335,8 @@ export default function App() {
     if (outcome === 'Draw' && lastOutcomeRef.current !== 'Draw') {
       lastOutcomeRef.current = 'Draw';
       if (soundOn) {
-        const a = audioRef.current || new Audio(drawSfx);
-        audioRef.current = a;
+        const a = drawAudioRef.current || new Audio(drawSfx);
+        drawAudioRef.current = a;
         a.currentTime = 0;
         const p = a.play();
         if (p && typeof p.catch === 'function') {
@@ -295,6 +345,22 @@ export default function App() {
       }
     } else if (outcome !== 'Draw') {
       lastOutcomeRef.current = outcome;
+    }
+  }, [outcome, soundOn]);
+
+  // Play win sound once when transitioning to a winner (X or O)
+  useEffect(() => {
+    if ((outcome === 'X' || outcome === 'O') && lastOutcomeRef.current !== outcome) {
+      lastOutcomeRef.current = outcome;
+      if (soundOn) {
+        const a = winAudioRef.current || new Audio(winSfx);
+        winAudioRef.current = a;
+        a.currentTime = 0;
+        const p = a.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {});
+        }
+      }
     }
   }, [outcome, soundOn]);
 
@@ -375,6 +441,14 @@ export default function App() {
   };
 
   const toggleSound = () => setSoundOn((s) => !s);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ttt-sound', soundOn ? 'on' : 'off');
+    } catch {
+      // ignore persistence errors
+    }
+  }, [soundOn]);
 
   // Helper to render a minimal icon without changing test-visible text
   const SoundIcon = ({ on }) => (
@@ -510,6 +584,21 @@ export default function App() {
 
             const onClick = (e) => {
               if (disabled) return;
+
+              // Play click sound only for human action when a move will be placed.
+              // Human clicks are the only triggers that reach here while enabled.
+              if (soundOn && (mode === '2p' || (mode === 'ai' && xIsNext))) {
+                const a = clickAudioRef.current || new Audio(clickSfx);
+                clickAudioRef.current = a;
+                try {
+                  a.currentTime = 0;
+                } catch {}
+                const p = a.play();
+                if (p && typeof p.catch === 'function') {
+                  p.catch(() => {});
+                }
+              }
+
               handleSquareClick(idx);
               const btn = e.currentTarget;
               btn.classList.add('square-placed');
