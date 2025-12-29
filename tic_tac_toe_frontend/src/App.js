@@ -9,6 +9,8 @@ import drawSfx from './assets/draw.mp3';
  */
 import clickSfx from './assets/click.mp3';
 import winSfx from './assets/win.mp3';
+// Lightweight confetti utility (tree-shaken, no extra config for CRA)
+import confetti from 'canvas-confetti';
 
 /**
  * Compute the winner of a tic-tac-toe board.
@@ -348,19 +350,46 @@ export default function App() {
     }
   }, [outcome, soundOn]);
 
-  // Play win sound once when transitioning to a winner (X or O)
+  // Play win sound once when transitioning to a winner (X or O) and trigger confetti
+  const confettiLaunchedRef = useRef(false);
+
   useEffect(() => {
-    if ((outcome === 'X' || outcome === 'O') && lastOutcomeRef.current !== outcome) {
+    // Only act on actual wins
+    const isWin = outcome === 'X' || outcome === 'O';
+    if (isWin && lastOutcomeRef.current !== outcome) {
       lastOutcomeRef.current = outcome;
+
+      // Audio (win chime)
       if (soundOn) {
         const a = winAudioRef.current || new Audio(winSfx);
         winAudioRef.current = a;
-        a.currentTime = 0;
+        try { a.currentTime = 0; } catch {}
         const p = a.play();
         if (p && typeof p.catch === 'function') {
           p.catch(() => {});
         }
       }
+
+      // Confetti (trigger once per win)
+      // Respect theme by using accent colors that look good on both themes.
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const colors = isDark
+        ? ['#60a5fa', '#22d3ee', '#ffffff']   // light/dark friendly
+        : ['#f59e0b', '#fbbf24', '#06b6d4'];
+
+      // Initialize on first user interaction already set up for audio; confetti doesn't need unlock,
+      // but we still keep the firing minimal and one-shot.
+      if (!confettiLaunchedRef.current) {
+        confettiLaunchedRef.current = true;
+
+        // A small burst and a follow-up to feel celebratory without being heavy.
+        const defaults = { spread: 70, ticks: 120, gravity: 0.9, scalar: 0.9, colors };
+        confetti({ ...defaults, particleCount: 60, origin: { y: 0.3 } });
+        setTimeout(() => confetti({ ...defaults, particleCount: 80, origin: { y: 0.2 } }), 120);
+      }
+    } else if (!isWin) {
+      // Clear flag when leaving win state (e.g., on restart/new round), so next win can fire again.
+      confettiLaunchedRef.current = false;
     }
   }, [outcome, soundOn]);
 
@@ -414,6 +443,8 @@ export default function App() {
     setXIsNext(true);
     setPendingAi(false);
     lastOutcomeRef.current = null;
+    // Reset confetti state for future wins
+    try { if (typeof window !== 'undefined') { /* no-op placeholder */ } } catch {}
   }
 
   function handleModeChange(e) {
