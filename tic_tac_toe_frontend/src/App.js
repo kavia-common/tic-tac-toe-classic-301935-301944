@@ -11,15 +11,12 @@ import drawSfx from './assets/draw.mp3';
  */
 function evaluateBoard(squares) {
   const lines = [
-    // rows
     [0, 1, 2],
     [3, 4, 5],
     [6, 7, 8],
-    // cols
     [0, 3, 6],
     [1, 4, 7],
     [2, 5, 8],
-    // diags
     [0, 4, 8],
     [2, 4, 6],
   ];
@@ -30,6 +27,86 @@ function evaluateBoard(squares) {
   }
   if (squares.every(Boolean)) return 'Draw';
   return null;
+}
+
+/**
+ * AI helpers
+ */
+function getAvailableMoves(sq) {
+  const m = [];
+  for (let i = 0; i < 9; i++) if (!sq[i]) m.push(i);
+  return m;
+}
+
+function randomMove(sq) {
+  const moves = getAvailableMoves(sq);
+  if (moves.length === 0) return null;
+  return moves[Math.floor(Math.random() * moves.length)];
+}
+
+function canWinNextMove(sq, player) {
+  const moves = getAvailableMoves(sq);
+  for (const i of moves) {
+    const copy = sq.slice();
+    copy[i] = player;
+    if (evaluateBoard(copy) === player) return i;
+  }
+  return null;
+}
+
+function pickCorner(sq) {
+  const corners = [0, 2, 6, 8].filter((i) => !sq[i]);
+  if (corners.length === 0) return null;
+  return corners[Math.floor(Math.random() * corners.length)];
+}
+
+// Minimax for 3x3 tic-tac-toe, AI is 'O', human is 'X'
+function minimax(sq, isMaximizing) {
+  const result = evaluateBoard(sq);
+  if (result === 'O') return { score: 1 };
+  if (result === 'X') return { score: -1 };
+  if (result === 'Draw') return { score: 0 };
+
+  if (isMaximizing) {
+    let best = { score: -Infinity, move: null };
+    for (const i of getAvailableMoves(sq)) {
+      const copy = sq.slice();
+      copy[i] = 'O';
+      const res = minimax(copy, false);
+      if (res.score > best.score) best = { score: res.score, move: i };
+    }
+    return best;
+  } else {
+    let best = { score: Infinity, move: null };
+    for (const i of getAvailableMoves(sq)) {
+      const copy = sq.slice();
+      copy[i] = 'X';
+      const res = minimax(copy, true);
+      if (res.score < best.score) best = { score: res.score, move: i };
+    }
+    return best;
+  }
+}
+
+function getAiMove(sq, difficulty) {
+  // Easy: random
+  if (difficulty === 'easy') {
+    return randomMove(sq);
+  }
+  // Medium: win -> block -> center -> corner -> random
+  if (difficulty === 'medium') {
+    const win = canWinNextMove(sq, 'O');
+    if (win !== null) return win;
+    const block = canWinNextMove(sq, 'X');
+    if (block !== null) return block;
+    if (!sq[4]) return 4;
+    const corner = pickCorner(sq);
+    if (corner !== null) return corner;
+    return randomMove(sq);
+  }
+  // Hard: minimax optimal
+  const { move } = minimax(sq, true);
+  return move ?? randomMove(sq);
 }
 
 /**
@@ -44,6 +121,11 @@ export default function App() {
   const [squares, setSquares] = useState(Array(9).fill(null));
   /** True if it's X's turn, false for O's turn */
   const [xIsNext, setXIsNext] = useState(true);
+
+  // Mode and difficulty
+  const [mode, setMode] = useState('2p'); // '2p' | 'ai'
+  const [difficulty, setDifficulty] = useState('medium'); // 'easy' | 'medium' | 'hard'
+  const [pendingAi, setPendingAi] = useState(false);
 
   // Sound state
   const [soundOn, setSoundOn] = useState(true);
@@ -70,31 +152,29 @@ export default function App() {
         audioRef.current = new Audio(drawSfx);
         audioRef.current.preload = 'auto';
       }
-      // Attempt a silent play/pause to satisfy autoplay policies
       const a = audioRef.current;
-      // some browsers require actual play to unlock; we'll catch promise errors silently
       a.volume = 0;
       const p = a.play();
       if (p && typeof p.then === 'function') {
-        p.then(() => {
-          a.pause();
-          a.currentTime = 0;
-          a.volume = 1;
-          audioReadyRef.current = true;
-        }).catch(() => {
-          // If it fails, we'll still mark as ready and rely on next gesture when playing
-          a.pause();
-          a.currentTime = 0;
-          a.volume = 1;
-          audioReadyRef.current = true;
-        });
+        p
+          .then(() => {
+            a.pause();
+            a.currentTime = 0;
+            a.volume = 1;
+            audioReadyRef.current = true;
+          })
+          .catch(() => {
+            a.pause();
+            a.currentTime = 0;
+            a.volume = 1;
+            audioReadyRef.current = true;
+          });
       } else {
         a.pause();
         a.currentTime = 0;
         a.volume = 1;
         audioReadyRef.current = true;
       }
-      // We only need to unlock once
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
@@ -115,8 +195,6 @@ export default function App() {
       if (soundOn) {
         const a = audioRef.current || new Audio(drawSfx);
         audioRef.current = a;
-        // If not unlocked yet, this call will be triggered by the same interaction that finished the game
-        // but we still guard with catch to avoid unhandled promise rejections in tests/headless.
         a.currentTime = 0;
         const p = a.play();
         if (p && typeof p.catch === 'function') {
@@ -124,17 +202,49 @@ export default function App() {
         }
       }
     } else if (outcome !== 'Draw') {
-      // track other states so we can detect future transitions
       lastOutcomeRef.current = outcome;
     }
   }, [outcome, soundOn]);
 
+  // Trigger AI move after human 'X' moves in Vs AI mode, if game not over
+  useEffect(() => {
+    if (mode !== 'ai') {
+      setPendingAi(false);
+      return;
+    }
+    if (gameOver) {
+      setPendingAi(false);
+      return;
+    }
+    // AI plays as 'O' when it's O's turn
+    if (!xIsNext) {
+      // Guard UI (disable human input) by marking pending
+      setPendingAi(true);
+      // small delay for UX; also allows animation frame to settle
+      const t = setTimeout(() => {
+        setPendingAi(false);
+        setSquares((prev) => {
+          // Double-check not ended and still O's turn for consistency
+          if (evaluateBoard(prev)) return prev;
+          const move = getAiMove(prev, difficulty);
+          if (move === null || prev[move]) return prev;
+          const next = prev.slice();
+          next[move] = 'O';
+          return next;
+        });
+        setXIsNext(true); // After AI (O), next is X
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [mode, xIsNext, squares, difficulty, gameOver]);
+
   // PUBLIC_INTERFACE
   function handleSquareClick(index) {
-    /** Handle a move: ignore if filled or game over */
+    /** Handle a move: ignore if filled or game over or AI turn */
     if (squares[index] || gameOver) return;
+    if (mode === 'ai' && !xIsNext) return; // Block clicks during AI turn
     const next = squares.slice();
-    next[index] = currentPlayer;
+    next[index] = xIsNext ? 'X' : 'O';
     setSquares(next);
     setXIsNext(!xIsNext);
   }
@@ -144,9 +254,33 @@ export default function App() {
     /** Reset the board to initial state */
     setSquares(Array(9).fill(null));
     setXIsNext(true);
-    // Allow a future draw event to trigger sound again
+    setPendingAi(false);
     lastOutcomeRef.current = null;
   }
+
+  function handleModeChange(e) {
+    const val = e.target.value;
+    if (val === mode) return;
+    // Reset on mode switch to avoid inconsistencies
+    handleRestart();
+    setMode(val);
+  }
+
+  function handleDifficultyChange(e) {
+    const val = e.target.value;
+    if (val === difficulty) return;
+    // Switching difficulty mid-game can lead to inconsistent AI planning - reset
+    handleRestart();
+    setDifficulty(val);
+  }
+
+  const isCellDisabled = (value) => {
+    if (gameOver) return true;
+    if (value) return true;
+    if (mode === 'ai' && !xIsNext) return true; // Disable during AI (O) turn
+    if (pendingAi) return true;
+    return false;
+  };
 
   const toggleSound = () => setSoundOn((s) => !s);
 
@@ -163,6 +297,35 @@ export default function App() {
         <h1 className="title">Tic-Tac-Toe</h1>
 
         <div className="controls" aria-label="controls">
+          <div className="selectors" role="group" aria-label="Game mode">
+            <label className="select">
+              <span className="select-label">Mode</span>
+              <select
+                aria-label="Select mode"
+                value={mode}
+                onChange={handleModeChange}
+              >
+                <option value="2p">2 Players</option>
+                <option value="ai">Vs AI</option>
+              </select>
+            </label>
+
+            {mode === 'ai' && (
+              <label className="select">
+                <span className="select-label">Difficulty</span>
+                <select
+                  aria-label="Select difficulty"
+                  value={difficulty}
+                  onChange={handleDifficultyChange}
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </label>
+            )}
+          </div>
+
           <button
             type="button"
             className="sound-toggle"
@@ -185,14 +348,12 @@ export default function App() {
         <div className="board" role="grid" aria-label="tic tac toe board">
           {squares.map((value, idx) => {
             const label = `cell ${idx + 1}`;
-            const disabled = Boolean(value) || gameOver;
+            const disabled = isCellDisabled(value);
 
-            // We use data attributes to help CSS hooks during tests; tests only check text/disabled.
             const handleActivate = (e) => {
-              // Add a short "pressing" class to give immediate feedback for keyboard/mouse down
+              if (disabled) return;
               const btn = e.currentTarget;
               btn.classList.add('square-pressing');
-              // Remove pressing state shortly after to let CSS transition do the rest
               window.requestAnimationFrame(() => {
                 setTimeout(() => btn.classList.remove('square-pressing'), 120);
               });
@@ -201,7 +362,6 @@ export default function App() {
             const handleKeyDown = (e) => {
               if (disabled) return;
               if (e.key === 'Enter' || e.key === ' ') {
-                // Prevent page scroll on Space
                 if (e.key === ' ') e.preventDefault();
                 handleActivate(e);
               }
@@ -210,8 +370,6 @@ export default function App() {
             const onClick = (e) => {
               if (disabled) return;
               handleSquareClick(idx);
-              // If a mark was placed, briefly add a "placed" class for pop animation
-              // This runs after state update; the button will become disabled but DOM remains for animation.
               const btn = e.currentTarget;
               btn.classList.add('square-placed');
               setTimeout(() => {
