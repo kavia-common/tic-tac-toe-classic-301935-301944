@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import './App.css';
 import drawSfx from './assets/draw.mp3';
 // Lazy-loadable SFX imports (webpack will bundle, but we keep small size and reuse)
@@ -141,6 +142,8 @@ function getAiMove(sq, difficulty) {
  */
 // PUBLIC_INTERFACE
 export default function App() {
+  const { t, i18n } = useTranslation();
+
   /** The 9 board cells; values are 'X', 'O', or null */
   const [squares, setSquares] = useState(Array(9).fill(null));
   /** True if it's X's turn, false for O's turn */
@@ -202,11 +205,11 @@ export default function App() {
 
   const currentPlayer = xIsNext ? 'X' : 'O';
   const statusText = useMemo(() => {
-    if (outcome === 'X') return 'X wins!';
-    if (outcome === 'O') return 'O wins!';
-    if (outcome === 'Draw') return "It's a draw.";
-    return `Turn: ${currentPlayer}`;
-  }, [outcome, currentPlayer]);
+    if (outcome === 'X') return t('status.xWins');
+    if (outcome === 'O') return t('status.oWins');
+    if (outcome === 'Draw') return t('status.draw');
+    return t('status.turn', { player: currentPlayer });
+  }, [outcome, currentPlayer, t]);
 
   // Scoreboard state with persistence
   const readScores = () => {
@@ -494,100 +497,124 @@ export default function App() {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   }
 
+  function handleLanguageChange(e) {
+    const lng = e.target.value;
+    if (!lng || lng === i18n.language) return;
+    i18n.changeLanguage(lng);
+  }
+
   return (
     <div className="app-root">
       <main className="container" role="main">
-        <h1 className="title">Tic Tac Toe game</h1>
+        <h1 className="title" data-testid="app-title">{t('app.title')}</h1>
 
-        <div className="controls" aria-label="controls">
-          <div className="selectors" role="group" aria-label="Game mode">
+        <div className="controls" aria-label={t('controls.controlsAria')}>
+          <div className="selectors" role="group" aria-label={t('controls.gameModeAria')}>
             <label className="select">
-              <span className="select-label">Mode</span>
+              <span className="select-label">{t('selectors.mode')}</span>
               <select
-                aria-label="Select mode"
+                aria-label={t('selectors.selectMode')}
                 value={mode}
                 onChange={handleModeChange}
               >
-                <option value="2p">2 Players</option>
-                <option value="ai">Vs AI</option>
+                <option value="2p">{t('modes.twoPlayers')}</option>
+                <option value="ai">{t('modes.vsAi')}</option>
               </select>
             </label>
 
             {mode === 'ai' && (
               <label className="select">
-                <span className="select-label">Difficulty</span>
+                <span className="select-label">{t('selectors.difficulty')}</span>
                 <select
-                  aria-label="Select difficulty"
+                  aria-label={t('selectors.selectDifficulty')}
                   value={difficulty}
                   onChange={handleDifficultyChange}
                 >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
+                  <option value="easy">{t('difficulties.easy')}</option>
+                  <option value="medium">{t('difficulties.medium')}</option>
+                  <option value="hard">{t('difficulties.hard')}</option>
                 </select>
               </label>
             )}
           </div>
 
-          <div className="inline-actions" role="group" aria-label="App settings">
+          <div className="inline-actions" role="group" aria-label={t('controls.appSettingsAria')}>
+            <label className="select language-select">
+              <span className="select-label">{t('controls.language')}</span>
+              <select
+                aria-label={t('controls.selectLanguage')}
+                value={i18n.language}
+                onChange={handleLanguageChange}
+                data-testid="language-select"
+              >
+                <option value="en">{t('languages.en')}</option>
+                <option value="es">{t('languages.es')}</option>
+              </select>
+            </label>
+
             <button
               type="button"
               className="sound-toggle"
               onClick={toggleSound}
-              aria-label={soundOn ? 'Mute sounds' : 'Unmute sounds'}
-              title={soundOn ? 'Mute sounds' : 'Unmute sounds'}
+              aria-label={soundOn ? t('controls.muteSounds') : t('controls.unmuteSounds')}
+              title={soundOn ? t('controls.muteSounds') : t('controls.unmuteSounds')}
+              data-testid="sound-toggle"
             >
               <SoundIcon on={soundOn} />
-              <span className="label">{soundOn ? 'Sound on' : 'Sound off'}</span>
+              <span className="label">{soundOn ? t('controls.soundOn') : t('controls.soundOff')}</span>
             </button>
 
             <button
               type="button"
               className="theme-toggle"
               onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              aria-label={theme === 'dark' ? t('controls.switchToLightTheme') : t('controls.switchToDarkTheme')}
+              title={theme === 'dark' ? t('controls.switchToLightTheme') : t('controls.switchToDarkTheme')}
+              data-testid="theme-toggle"
             >
               <span className="icon" aria-hidden="true">{theme === 'dark' ? '🌙' : '☀️'}</span>
-              <span className="label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+              <span className="label">{theme === 'dark' ? t('controls.themeDark') : t('controls.themeLight')}</span>
             </button>
           </div>
         </div>
 
         {/* Scoreboard */}
-        <div className="scoreboard" role="group" aria-label="Scoreboard">
+        <div className="scoreboard" role="group" aria-label={t('controls.scoreboardAria')}>
           <div className="score" aria-live="polite">
             <span className="score-label" aria-hidden="true">X</span>
-            <span className="score-value" aria-label="X score">{scores.x}</span>
+            <span className="score-value" aria-label={t('scoreboard.xScoreAria')}>{scores.x}</span>
           </div>
           <div className="score" aria-live="polite">
             <span className="score-label" aria-hidden="true">O</span>
-            <span className="score-value" aria-label="O score">{scores.o}</span>
+            <span className="score-value" aria-label={t('scoreboard.oScoreAria')}>{scores.o}</span>
           </div>
           <div className="score" aria-live="polite">
-            <span className="score-label" aria-hidden="true">Draws</span>
-            <span className="score-value" aria-label="Draws score">{scores.draws}</span>
+            <span className="score-label" aria-hidden="true">{t('scoreboard.draws')}</span>
+            <span className="score-value" aria-label={t('scoreboard.drawsScoreAria')}>{scores.draws}</span>
           </div>
           <button
             type="button"
             className="reset-scores"
             onClick={resetScores}
-            aria-label="Reset scores"
-            title="Reset scores"
+            aria-label={t('scoreboard.resetScoresAria')}
+            title={t('scoreboard.resetScoresAria')}
+            data-testid="reset-scores"
           >
-            Reset Scores
+            {t('scoreboard.resetScores')}
           </button>
         </div>
 
         <div
           className={`status ${outcome === 'X' ? 'status-win' : outcome === 'O' ? 'status-win' : outcome === 'Draw' ? 'status-draw' : ''}`}
           aria-live="polite"
+          data-testid="status-text"
         >
           {statusText}
         </div>
 
-        <div className="board" role="grid" aria-label="tic tac toe board">
+        <div className="board" role="grid" aria-label={t('controls.boardAria')}>
           {squares.map((value, idx) => {
+            // Keep this aria-label stable for existing tests which query /cell \d+/i
             const label = `cell ${idx + 1}`;
             const disabled = isCellDisabled(value);
 
@@ -655,6 +682,7 @@ export default function App() {
                 onMouseDown={onMouseDown}
                 onKeyDown={handleKeyDown}
                 onClick={onClick}
+                data-testid={`cell-${idx + 1}`}
               >
                 {value}
               </button>
@@ -666,13 +694,14 @@ export default function App() {
           type="button"
           className="restart"
           onClick={handleRestart}
-          aria-label="Restart game"
+          aria-label={t('controls.restartAria')}
+          data-testid="restart-button"
         >
-          Restart
+          {t('controls.restart')}
         </button>
       </main>
 
-      <footer className="app-footer" aria-label="Footer">
+      <footer className="app-footer" aria-label={t('controls.footerAria')}>
         <small className="app-footer-text">@danielm</small>
       </footer>
     </div>

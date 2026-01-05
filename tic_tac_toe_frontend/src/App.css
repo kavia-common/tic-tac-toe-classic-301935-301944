@@ -130,6 +130,11 @@ body {
   box-shadow: 0 0 0 3px var(--ring);
 }
 
+/* Language selector (visually consistent with other selects) */
+.language-select {
+  min-width: 138px;
+}
+
 .sound-toggle {
   display: inline-flex;
   align-items: center;
