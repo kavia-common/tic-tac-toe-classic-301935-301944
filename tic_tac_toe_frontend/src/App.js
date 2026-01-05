@@ -671,6 +671,10 @@ export default function App() {
           Restart
         </button>
       </main>
+
+      <footer className="app-footer" aria-label="Footer">
+        <small className="app-footer-text">@danielm</small>
+      </footer>
     </div>
   );
 }
