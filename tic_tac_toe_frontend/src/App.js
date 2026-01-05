@@ -497,7 +497,7 @@ export default function App() {
   return (
     <div className="app-root">
       <main className="container" role="main">
-        <h1 className="title">The game</h1>
+        <h1 className="title">Tic Tac Toe game</h1>
 
         <div className="controls" aria-label="controls">
           <div className="selectors" role="group" aria-label="Game mode">
