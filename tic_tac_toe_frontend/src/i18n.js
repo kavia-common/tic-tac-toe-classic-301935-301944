@@ -26,8 +26,10 @@ const resources = {
       selectors: {
         mode: 'Mode',
         difficulty: 'Difficulty',
+        size: 'Size',
         selectMode: 'Select mode',
         selectDifficulty: 'Select difficulty',
+        selectSize: 'Select board size',
       },
       modes: {
         twoPlayers: '2 Players',
@@ -110,6 +112,11 @@ const resources = {
         close: 'Close',
         closeAria: 'Close About dialog',
       },
+      sizes: {
+        size3: '3×3',
+        size4: '4×4 (Experimental)',
+        size5: '5×5 (Experimental)',
+      },
       languages: {
         en: 'English',
         es: 'Español',
@@ -124,8 +131,10 @@ const resources = {
       selectors: {
         mode: 'Modo',
         difficulty: 'Dificultad',
+        size: 'Tamaño',
         selectMode: 'Seleccionar modo',
         selectDifficulty: 'Seleccionar dificultad',
+        selectSize: 'Seleccionar tamaño del tablero',
       },
       modes: {
         twoPlayers: '2 Jugadores',

@@ -17,31 +17,62 @@ import AboutDialog from './components/AboutDialog';
 import pkg from '../package.json';
 
 /**
- * Compute the winner of a tic-tac-toe board.
+ * Compute the winner of a tic-tac-toe board for an NxN grid.
+ *
+ * Win condition: a full line (row/col/diag) of the same symbol for the given size.
  * Returns an object:
- * - { winner: 'X'|'O', line: [a,b,c] } when there is a winner
+ * - { winner: 'X'|'O', line: number[] } when there is a winner
  * - { winner: 'Draw', line: null } when all filled without a winner
  * - { winner: null, line: null } when game is in progress
  *
- * This allows the UI to highlight the exact winning line.
+ * This allows the UI to highlight the exact winning line (N cells).
  */
-function evaluateBoardDetailed(squares) {
-  const lines = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6],
-  ];
-  for (const [a, b, c] of lines) {
-    if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return { winner: squares[a], line: [a, b, c] };
-    }
+function evaluateBoardDetailed(squares, size = 3) {
+  const n = Number(size) || 3;
+
+  // Build all winning lines dynamically (rows, cols, diagonals).
+  const lines = [];
+
+  // Rows
+  for (let r = 0; r < n; r++) {
+    const row = [];
+    for (let c = 0; c < n; c++) row.push(r * n + c);
+    lines.push(row);
   }
-  if (squares.every(Boolean)) return { winner: 'Draw', line: null };
+
+  // Columns
+  for (let c = 0; c < n; c++) {
+    const col = [];
+    for (let r = 0; r < n; r++) col.push(r * n + c);
+    lines.push(col);
+  }
+
+  // Main diagonal
+  const diag1 = [];
+  for (let i = 0; i < n; i++) diag1.push(i * n + i);
+  lines.push(diag1);
+
+  // Anti-diagonal
+  const diag2 = [];
+  for (let i = 0; i < n; i++) diag2.push(i * n + (n - 1 - i));
+  lines.push(diag2);
+
+  for (const line of lines) {
+    const firstIdx = line[0];
+    const firstVal = squares[firstIdx];
+    if (!firstVal) continue;
+
+    let ok = true;
+    for (let k = 1; k < line.length; k++) {
+      if (squares[line[k]] !== firstVal) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return { winner: firstVal, line };
+  }
+
+  if (squares.length === n * n && squares.every(Boolean)) return { winner: 'Draw', line: null };
   return { winner: null, line: null };
 }
 
@@ -52,17 +83,17 @@ function evaluateBoardDetailed(squares) {
  * - 'Draw' if all cells are filled and no winner
  * - null if the game is still in progress
  */
-function evaluateBoard(squares) {
-  const res = evaluateBoardDetailed(squares);
+function evaluateBoard(squares, size = 3) {
+  const res = evaluateBoardDetailed(squares, size);
   return res.winner;
 }
 
 /**
- * AI helpers
+ * AI helpers (work for any NxN size, but minimax is only used for 3x3).
  */
 function getAvailableMoves(sq) {
   const m = [];
-  for (let i = 0; i < 9; i++) if (!sq[i]) m.push(i);
+  for (let i = 0; i < sq.length; i++) if (!sq[i]) m.push(i);
   return m;
 }
 
@@ -72,25 +103,27 @@ function randomMove(sq) {
   return moves[Math.floor(Math.random() * moves.length)];
 }
 
-function canWinNextMove(sq, player) {
+function canWinNextMove(sq, player, size) {
   const moves = getAvailableMoves(sq);
   for (const i of moves) {
     const copy = sq.slice();
     copy[i] = player;
-    if (evaluateBoard(copy) === player) return i;
+    if (evaluateBoard(copy, size) === player) return i;
   }
   return null;
 }
 
-function pickCorner(sq) {
-  const corners = [0, 2, 6, 8].filter((i) => !sq[i]);
+function pickCorner(sq, size) {
+  // Corners for NxN: (0,0), (0,n-1), (n-1,0), (n-1,n-1)
+  const n = Number(size) || 3;
+  const corners = [0, n - 1, (n - 1) * n, n * n - 1].filter((i) => !sq[i]);
   if (corners.length === 0) return null;
   return corners[Math.floor(Math.random() * corners.length)];
 }
 
-// Minimax for 3x3 tic-tac-toe, AI is 'O', human is 'X'
+// Minimax for 3x3 tic-tac-toe only, AI is 'O', human is 'X'
 function minimax(sq, isMaximizing) {
-  const result = evaluateBoard(sq);
+  const result = evaluateBoard(sq, 3);
   if (result === 'O') return { score: 1 };
   if (result === 'X') return { score: -1 };
   if (result === 'Draw') return { score: 0 };
@@ -116,23 +149,42 @@ function minimax(sq, isMaximizing) {
   }
 }
 
-function getAiMove(sq, difficulty) {
+function getAiMove(sq, difficulty, size) {
+  const n = Number(size) || 3;
+
   // Easy: random
   if (difficulty === 'easy') {
     return randomMove(sq);
   }
+
   // Medium: win -> block -> center -> corner -> random
+  // Note: Center is a single cell only for odd sizes; for even sizes we skip direct center and rely on corners/random.
   if (difficulty === 'medium') {
-    const win = canWinNextMove(sq, 'O');
+    const win = canWinNextMove(sq, 'O', n);
     if (win !== null) return win;
-    const block = canWinNextMove(sq, 'X');
+
+    const block = canWinNextMove(sq, 'X', n);
     if (block !== null) return block;
-    if (!sq[4]) return 4;
-    const corner = pickCorner(sq);
+
+    if (n % 2 === 1) {
+      const center = Math.floor((n * n) / 2);
+      if (!sq[center]) return center;
+    }
+
+    const corner = pickCorner(sq, n);
     if (corner !== null) return corner;
+
     return randomMove(sq);
   }
-  // Hard: minimax optimal
+
+  // Hard: minimax optimal for 3x3 only.
+  // For 5x5, minimax would be far too expensive; we gracefully fallback to Medium heuristics.
+  // For 4x4 we also avoid minimax (still large branching). This keeps gameplay responsive.
+  if (n !== 3) {
+    // Minimal documentation required by task: Hard fallback for larger boards.
+    return getAiMove(sq, 'medium', n);
+  }
+
   const { move } = minimax(sq, true);
   return move ?? randomMove(sq);
 }
@@ -171,8 +223,12 @@ function safeParseJson(raw) {
 export default function App() {
   const { t, i18n } = useTranslation();
 
-  /** The 9 board cells; values are 'X', 'O', or null */
-  const [squares, setSquares] = useState(Array(9).fill(null));
+  // Board size selector (experimental): 3x3 (default), 4x4, 5x5.
+  // Note: Size affects win detection and AI; scoreboard stays global as requested.
+  const [boardSize, setBoardSize] = useState(3);
+
+  /** The NxN board cells; values are 'X', 'O', or null */
+  const [squares, setSquares] = useState(() => Array(3 * 3).fill(null));
   /** True if it's X's turn, false for O's turn */
   const [xIsNext, setXIsNext] = useState(true);
 
@@ -312,8 +368,10 @@ export default function App() {
     }
   }, [seriesState]);
 
-  // Determine game status with winning line info
-  const evaluation = useMemo(() => evaluateBoardDetailed(squares), [squares]);
+  const boardCellCount = boardSize * boardSize;
+
+  // Determine game status with winning line info (NxN)
+  const evaluation = useMemo(() => evaluateBoardDetailed(squares, boardSize), [squares, boardSize]);
   const outcome = evaluation.winner;
   const winningLine = evaluation.line; // null for draw or in-progress
   const gameOver = outcome === 'X' || outcome === 'O' || outcome === 'Draw';
@@ -628,9 +686,9 @@ export default function App() {
         setPendingAi(false);
         setSquares((prev) => {
           // Double-check not ended and still O's turn for consistency
-          if (evaluateBoard(prev)) return prev;
+          if (evaluateBoard(prev, boardSize)) return prev;
           if (seriesLocked) return prev;
-          const move = getAiMove(prev, difficulty);
+          const move = getAiMove(prev, difficulty, boardSize);
           if (move === null || prev[move]) return prev;
           const next = prev.slice();
           next[move] = 'O';
@@ -645,6 +703,7 @@ export default function App() {
   // PUBLIC_INTERFACE
   function handleSquareClick(index) {
     /** Handle a move: ignore if filled or game over or series locked or AI turn */
+    if (!Number.isInteger(index) || index < 0 || index >= squares.length) return;
     if (squares[index] || gameOver) return;
     if (seriesLocked) return;
     if (mode === 'ai' && !xIsNext) return; // Block clicks during AI turn
@@ -657,7 +716,7 @@ export default function App() {
   // PUBLIC_INTERFACE
   function handleRestart() {
     /** Reset the board to initial state (per-round restart; does not modify series state) */
-    setSquares(Array(9).fill(null));
+    setSquares(Array(boardSize * boardSize).fill(null));
     setXIsNext(true);
     setPendingAi(false);
     lastOutcomeRef.current = null;
@@ -665,6 +724,36 @@ export default function App() {
     prevSeriesOutcomeRef.current = null;
     // Confetti state is reset by effects when leaving win state.
     try { if (typeof window !== 'undefined') { /* no-op placeholder */ } } catch {}
+  }
+
+  function handleBoardSizeChange(e) {
+    const nextSize = Number(e.target.value);
+    if (![3, 4, 5].includes(nextSize)) return;
+    if (nextSize === boardSize) return;
+
+    // Requirement: do not mix series/stats across sizes. Easiest path:
+    // - restart current round on size change
+    // - end current series (if any) so user can start a new one under the new size
+    setBoardSize(nextSize);
+
+    // End series unconditionally (clears in-series state and restarts board).
+    // This does not touch the persistent overall scoreboard.
+    setSeriesEnabled(false);
+    setSeriesState({
+      inProgress: false,
+      locked: false,
+      seriesWins: { x: 0, o: 0 },
+      round: 1,
+      seriesWinner: null,
+    });
+
+    // Reset round state + board for new size.
+    setSquares(Array(nextSize * nextSize).fill(null));
+    setXIsNext(true);
+    setPendingAi(false);
+    lastOutcomeRef.current = null;
+    prevOutcomeRef.current = null;
+    prevSeriesOutcomeRef.current = null;
   }
 
   // PUBLIC_INTERFACE
@@ -843,6 +932,19 @@ export default function App() {
                 </select>
               </label>
             )}
+
+            <label className="select">
+              <span className="select-label">{t('selectors.size')}</span>
+              <select
+                aria-label={t('selectors.selectSize')}
+                value={boardSize}
+                onChange={handleBoardSizeChange}
+              >
+                <option value={3}>{t('sizes.size3')}</option>
+                <option value={4}>{t('sizes.size4')}</option>
+                <option value={5}>{t('sizes.size5')}</option>
+              </select>
+            </label>
           </div>
 
           <div className="inline-actions" role="group" aria-label={t('controls.appSettingsAria')}>
@@ -1025,7 +1127,14 @@ export default function App() {
           {statusText}
         </div>
 
-        <div className="board" role="grid" aria-label={t('controls.boardAria')}>
+        <div
+          className="board"
+          role="grid"
+          aria-label={t('controls.boardAria')}
+          aria-rowcount={boardSize}
+          aria-colcount={boardSize}
+          style={{ '--board-size': boardSize }}
+        >
           {squares.map((value, idx) => {
             // Keep this aria-label stable for existing tests which query /cell \d+/i
             const label = `cell ${idx + 1}`;

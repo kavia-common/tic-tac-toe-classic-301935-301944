@@ -643,13 +643,21 @@ body {
   background: rgba(96, 165, 250, 0.12);
 }
 
-/* 3x3 grid board */
+/* NxN grid board (default 3x3 via --board-size) */
 .board {
   width: 100%;
   max-width: 440px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--board-size, 3), 1fr);
   gap: 12px;
+}
+
+/* Slightly tighter gaps on larger boards to fit comfortably */
+.board[style*="--board-size: 4"] {
+  gap: 10px;
+}
+.board[style*="--board-size: 5"] {
+  gap: 8px;
 }
 
 /* Square buttons that keep aspect ratio */
@@ -668,6 +676,14 @@ body {
   transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease;
   user-select: none;
   will-change: transform;
+}
+
+/* For larger boards, reduce mark size slightly to prevent crowding */
+.board[style*="--board-size: 4"] .square {
+  font-size: clamp(22px, 6.2vw, 40px);
+}
+.board[style*="--board-size: 5"] .square {
+  font-size: clamp(18px, 5.2vw, 32px);
 }
 :root[data-theme="dark"] .square {
   background: #0f172a;
