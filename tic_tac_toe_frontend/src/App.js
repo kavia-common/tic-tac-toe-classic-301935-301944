@@ -13,6 +13,9 @@ import winSfx from './assets/win.mp3';
 // Lightweight confetti utility (tree-shaken, no extra config for CRA)
 import confetti from 'canvas-confetti';
 
+import AboutDialog from './components/AboutDialog';
+import pkg from '../package.json';
+
 /**
  * Compute the winner of a tic-tac-toe board.
  * Returns an object:
@@ -177,6 +180,10 @@ export default function App() {
   const [mode, setMode] = useState('2p'); // '2p' | 'ai'
   const [difficulty, setDifficulty] = useState('medium'); // 'easy' | 'medium' | 'hard'
   const [pendingAi, setPendingAi] = useState(false);
+
+  // About dialog state
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const aboutButtonRef = useRef(null);
 
   // Sound state
   const [soundOn, setSoundOn] = useState(() => {
@@ -784,6 +791,25 @@ export default function App() {
   const startSeriesEnabled = seriesEnabled && !seriesInProgress;
   const endSeriesEnabled = seriesEnabled && seriesInProgress;
 
+  const appName = 'Tic Tac Toe';
+  const appVersion = typeof pkg?.version === 'string' ? pkg.version : null;
+
+  // PUBLIC_INTERFACE
+  function openAbout() {
+    /** Open About dialog and let the modal handle focus management. */
+    setAboutOpen(true);
+  }
+
+  // PUBLIC_INTERFACE
+  function closeAbout() {
+    /** Close About dialog and restore focus to the About button. */
+    setAboutOpen(false);
+    // AboutDialog also restores focus to previously focused element; this is a safe extra.
+    window.setTimeout(() => {
+      aboutButtonRef.current?.focus?.();
+    }, 0);
+  }
+
   return (
     <div className="app-root">
       <main className="container" role="main">
@@ -855,6 +881,19 @@ export default function App() {
             >
               <span className="icon" aria-hidden="true">{theme === 'dark' ? '🌙' : '☀️'}</span>
               <span className="label">{theme === 'dark' ? t('controls.themeDark') : t('controls.themeLight')}</span>
+            </button>
+
+            <button
+              ref={aboutButtonRef}
+              type="button"
+              className="about-btn"
+              onClick={openAbout}
+              aria-label={t('about.openAria')}
+              title={t('about.openAria')}
+              data-testid="about-button"
+            >
+              <span className="icon" aria-hidden="true">i</span>
+              <span className="label">{t('about.open')}</span>
             </button>
           </div>
         </div>
@@ -1078,6 +1117,13 @@ export default function App() {
       <footer className="app-footer" aria-label={t('controls.footerAria')}>
         <small className="app-footer-text">@danielm</small>
       </footer>
+
+      <AboutDialog
+        open={aboutOpen}
+        onClose={closeAbout}
+        appName={appName}
+        version={appVersion}
+      />
     </div>
   );
 }
