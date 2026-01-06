@@ -183,7 +183,7 @@ body {
   margin: 0;
   /* Epic, readable display font with solid fallbacks */
   font-family: "Cinzel", "Cinzel Decorative", ui-serif, Georgia, "Times New Roman", serif;
-  font-size: 28px;
+  font-size: 26px; /* slightly smaller for better balance */
   font-weight: 800;
   letter-spacing: 1.2px;
   line-height: 1.1;
