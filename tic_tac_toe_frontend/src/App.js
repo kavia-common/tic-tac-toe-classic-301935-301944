@@ -135,6 +135,30 @@ function getAiMove(sq, difficulty) {
 }
 
 /**
+ * Best-of-N helpers.
+ */
+function clampSeriesN(n) {
+  const allowed = [3, 5, 7];
+  const parsed = Number(n);
+  if (!Number.isFinite(parsed)) return 3;
+  if (allowed.includes(parsed)) return parsed;
+  return 3;
+}
+
+function seriesThreshold(n) {
+  // Best-of-N: first to ceil(N/2)
+  return Math.ceil(n / 2);
+}
+
+function safeParseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A note on audio/autoplay:
  * We create the Audio element lazily and "unlock" it on first user interaction
  * (click/keydown) so that browsers allow playback. We also guard to play the
@@ -187,6 +211,65 @@ export default function App() {
   };
   const [theme, setTheme] = useState(getInitialTheme);
 
+  // SERIES MODE state (best-of-N)
+  // Persisted keys:
+  // - ttt-series-enabled: "on" | "off"
+  // - ttt-series-n: "3" | "5" | "7"
+  // - ttt-series-state: JSON { inProgress, locked, seriesWins:{x,o}, round:number, seriesWinner:null|'X'|'O' }
+  const [seriesEnabled, setSeriesEnabled] = useState(() => {
+    try {
+      const v = localStorage.getItem('ttt-series-enabled');
+      if (v === 'on') return true;
+      if (v === 'off') return false;
+    } catch {}
+    return false;
+  });
+
+  const [seriesN, setSeriesN] = useState(() => {
+    try {
+      return clampSeriesN(localStorage.getItem('ttt-series-n') ?? 3);
+    } catch {
+      return 3;
+    }
+  });
+
+  const [seriesState, setSeriesState] = useState(() => {
+    try {
+      const raw = localStorage.getItem('ttt-series-state');
+      const parsed = safeParseJson(raw);
+      if (!parsed) {
+        return {
+          inProgress: false,
+          locked: false,
+          seriesWins: { x: 0, o: 0 },
+          round: 1,
+          seriesWinner: null,
+        };
+      }
+      const inProgress = Boolean(parsed.inProgress);
+      const locked = Boolean(parsed.locked);
+      const x = Number.isFinite(parsed?.seriesWins?.x) ? parsed.seriesWins.x : 0;
+      const o = Number.isFinite(parsed?.seriesWins?.o) ? parsed.seriesWins.o : 0;
+      const round = Number.isFinite(parsed?.round) && parsed.round >= 1 ? parsed.round : 1;
+      const seriesWinner = parsed?.seriesWinner === 'X' || parsed?.seriesWinner === 'O' ? parsed.seriesWinner : null;
+      return {
+        inProgress,
+        locked,
+        seriesWins: { x, o },
+        round,
+        seriesWinner,
+      };
+    } catch {
+      return {
+        inProgress: false,
+        locked: false,
+        seriesWins: { x: 0, o: 0 },
+        round: 1,
+        seriesWinner: null,
+      };
+    }
+  });
+
   // Apply theme to document element and persist
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -197,6 +280,31 @@ export default function App() {
     }
   }, [theme]);
 
+  // Persist series mode toggle and N and in-progress state
+  useEffect(() => {
+    try {
+      localStorage.setItem('ttt-series-enabled', seriesEnabled ? 'on' : 'off');
+    } catch {
+      // ignore
+    }
+  }, [seriesEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ttt-series-n', String(seriesN));
+    } catch {
+      // ignore
+    }
+  }, [seriesN]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ttt-series-state', JSON.stringify(seriesState));
+    } catch {
+      // ignore
+    }
+  }, [seriesState]);
+
   // Determine game status with winning line info
   const evaluation = useMemo(() => evaluateBoardDetailed(squares), [squares]);
   const outcome = evaluation.winner;
@@ -204,12 +312,42 @@ export default function App() {
   const gameOver = outcome === 'X' || outcome === 'O' || outcome === 'Draw';
 
   const currentPlayer = xIsNext ? 'X' : 'O';
+  const seriesInProgress = seriesEnabled && seriesState.inProgress;
+  const seriesLocked = seriesInProgress && seriesState.locked;
+  const neededToWinSeries = useMemo(() => seriesThreshold(seriesN), [seriesN]);
+
+  // Series score should only be visible/meaningful when series is enabled.
+  const seriesStatusText = useMemo(() => {
+    if (!seriesEnabled) return null;
+
+    if (!seriesState.inProgress) {
+      return t('series.notStarted', { n: seriesN, threshold: neededToWinSeries });
+    }
+
+    if (seriesState.seriesWinner) {
+      return t('series.winner', { player: seriesState.seriesWinner, x: seriesState.seriesWins.x, o: seriesState.seriesWins.o });
+    }
+
+    return t('series.inProgress', {
+      n: seriesN,
+      round: seriesState.round,
+      threshold: neededToWinSeries,
+      x: seriesState.seriesWins.x,
+      o: seriesState.seriesWins.o,
+    });
+  }, [seriesEnabled, seriesState, seriesN, neededToWinSeries, t]);
+
   const statusText = useMemo(() => {
+    // If series winner has been decided, show a series-specific message and keep board locked.
+    if (seriesLocked && seriesState.seriesWinner) {
+      return t('series.winner', { player: seriesState.seriesWinner, x: seriesState.seriesWins.x, o: seriesState.seriesWins.o });
+    }
+
     if (outcome === 'X') return t('status.xWins');
     if (outcome === 'O') return t('status.oWins');
     if (outcome === 'Draw') return t('status.draw');
     return t('status.turn', { player: currentPlayer });
-  }, [outcome, currentPlayer, t]);
+  }, [outcome, currentPlayer, t, seriesLocked, seriesState]);
 
   // Scoreboard state with persistence
   const readScores = () => {
@@ -236,7 +374,7 @@ export default function App() {
     }
   }, [scores]);
 
-  // Increment appropriate score when a game ends
+  // Increment appropriate persistent score when a game ends
   const prevOutcomeRef = useRef(null);
   useEffect(() => {
     if (!gameOver) return;
@@ -250,6 +388,70 @@ export default function App() {
       setScores((s) => ({ ...s, draws: s.draws + 1 }));
     }
   }, [gameOver, outcome]);
+
+  // Update series score at end of round (only when in a series).
+  const prevSeriesOutcomeRef = useRef(null);
+  useEffect(() => {
+    if (!seriesInProgress) {
+      prevSeriesOutcomeRef.current = null;
+      return;
+    }
+    if (!gameOver) return;
+    if (prevSeriesOutcomeRef.current === outcome) return;
+
+    prevSeriesOutcomeRef.current = outcome;
+
+    if (outcome === 'X' || outcome === 'O') {
+      setSeriesState((s) => {
+        if (!s.inProgress || s.locked) return s;
+
+        const nextWins = { ...s.seriesWins };
+        if (outcome === 'X') nextWins.x += 1;
+        if (outcome === 'O') nextWins.o += 1;
+
+        const threshold = seriesThreshold(seriesN);
+        const xReached = nextWins.x >= threshold;
+        const oReached = nextWins.o >= threshold;
+        const seriesWinner = xReached ? 'X' : oReached ? 'O' : null;
+
+        return {
+          ...s,
+          seriesWins: nextWins,
+          locked: Boolean(seriesWinner), // lock immediately when threshold reached
+          seriesWinner,
+        };
+      });
+    }
+    // Draws do not count towards series threshold
+  }, [seriesInProgress, gameOver, outcome, seriesN]);
+
+  // Trigger confetti for series win (separate from per-round win)
+  const seriesConfettiLaunchedRef = useRef(false);
+  useEffect(() => {
+    if (!seriesInProgress) {
+      seriesConfettiLaunchedRef.current = false;
+      return;
+    }
+    if (!seriesState.seriesWinner) {
+      seriesConfettiLaunchedRef.current = false;
+      return;
+    }
+    if (seriesConfettiLaunchedRef.current) return;
+
+    seriesConfettiLaunchedRef.current = true;
+
+    // Respect theme by using accent colors that look good on both themes.
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const colors = isDark
+      ? ['#60a5fa', '#22d3ee', '#ffffff']
+      : ['#f59e0b', '#fbbf24', '#06b6d4'];
+
+    // Bigger burst than per-round to signal series victory.
+    const defaults = { spread: 80, ticks: 160, gravity: 0.85, scalar: 1.0, colors };
+    confetti({ ...defaults, particleCount: 90, origin: { y: 0.25 } });
+    setTimeout(() => confetti({ ...defaults, particleCount: 120, origin: { y: 0.2 } }), 160);
+    setTimeout(() => confetti({ ...defaults, particleCount: 140, origin: { y: 0.18 } }), 320);
+  }, [seriesInProgress, seriesState.seriesWinner, seriesState.seriesWins]);
 
   // PUBLIC_INTERFACE
   function resetScores() {
@@ -396,7 +598,7 @@ export default function App() {
     }
   }, [outcome, soundOn]);
 
-  // Trigger AI move after human 'X' moves in Vs AI mode, if game not over
+  // Trigger AI move after human 'X' moves in Vs AI mode, if game not over (and series not locked)
   useEffect(() => {
     if (mode !== 'ai') {
       setPendingAi(false);
@@ -406,16 +608,21 @@ export default function App() {
       setPendingAi(false);
       return;
     }
+    if (seriesLocked) {
+      setPendingAi(false);
+      return;
+    }
     // AI plays as 'O' when it's O's turn
     if (!xIsNext) {
       // Guard UI (disable human input) by marking pending
       setPendingAi(true);
       // small delay for UX; also allows animation frame to settle
-      const t = setTimeout(() => {
+      const tmr = setTimeout(() => {
         setPendingAi(false);
         setSquares((prev) => {
           // Double-check not ended and still O's turn for consistency
           if (evaluateBoard(prev)) return prev;
+          if (seriesLocked) return prev;
           const move = getAiMove(prev, difficulty);
           if (move === null || prev[move]) return prev;
           const next = prev.slice();
@@ -424,14 +631,15 @@ export default function App() {
         });
         setXIsNext(true); // After AI (O), next is X
       }, 250);
-      return () => clearTimeout(t);
+      return () => clearTimeout(tmr);
     }
-  }, [mode, xIsNext, squares, difficulty, gameOver]);
+  }, [mode, xIsNext, squares, difficulty, gameOver, seriesLocked]);
 
   // PUBLIC_INTERFACE
   function handleSquareClick(index) {
-    /** Handle a move: ignore if filled or game over or AI turn */
+    /** Handle a move: ignore if filled or game over or series locked or AI turn */
     if (squares[index] || gameOver) return;
+    if (seriesLocked) return;
     if (mode === 'ai' && !xIsNext) return; // Block clicks during AI turn
     const next = squares.slice();
     next[index] = xIsNext ? 'X' : 'O';
@@ -441,13 +649,53 @@ export default function App() {
 
   // PUBLIC_INTERFACE
   function handleRestart() {
-    /** Reset the board to initial state */
+    /** Reset the board to initial state (per-round restart; does not modify series state) */
     setSquares(Array(9).fill(null));
     setXIsNext(true);
     setPendingAi(false);
     lastOutcomeRef.current = null;
-    // Reset confetti state for future wins
+    prevOutcomeRef.current = null;
+    prevSeriesOutcomeRef.current = null;
+    // Confetti state is reset by effects when leaving win state.
     try { if (typeof window !== 'undefined') { /* no-op placeholder */ } } catch {}
+  }
+
+  // PUBLIC_INTERFACE
+  function startSeries() {
+    /** Start a new series; reset in-series score and round without affecting global persistent scores. */
+    setSeriesState({
+      inProgress: true,
+      locked: false,
+      seriesWins: { x: 0, o: 0 },
+      round: 1,
+      seriesWinner: null,
+    });
+    // Start series from a clean board
+    handleRestart();
+  }
+
+  // PUBLIC_INTERFACE
+  function endSeries() {
+    /** End the current series; clears in-series state without affecting global persistent scores. */
+    setSeriesState({
+      inProgress: false,
+      locked: false,
+      seriesWins: { x: 0, o: 0 },
+      round: 1,
+      seriesWinner: null,
+    });
+    handleRestart();
+  }
+
+  // PUBLIC_INTERFACE
+  function nextRound() {
+    /** Advance to next round within an active series; resets only the board/turn and increments round counter. */
+    setSeriesState((s) => {
+      if (!s.inProgress) return s;
+      if (s.locked) return s; // series decided
+      return { ...s, round: s.round + 1 };
+    });
+    handleRestart();
   }
 
   function handleModeChange(e) {
@@ -466,7 +714,36 @@ export default function App() {
     setDifficulty(val);
   }
 
+  function handleSeriesToggle(e) {
+    const on = e.target.checked;
+    setSeriesEnabled(on);
+    // If turning off, also end/clear the series state so refresh doesn't "keep" it in the background.
+    if (!on) {
+      endSeries();
+    }
+  }
+
+  function handleSeriesNChange(e) {
+    const n = clampSeriesN(e.target.value);
+    setSeriesN(n);
+    // If a series is already in progress, keep its current state but re-check lock condition
+    // in case user changes N mid-series; we choose to keep existing wins but recompute threshold.
+    setSeriesState((s) => {
+      if (!s.inProgress) return s;
+      const threshold = seriesThreshold(n);
+      const xReached = s.seriesWins.x >= threshold;
+      const oReached = s.seriesWins.o >= threshold;
+      const seriesWinner = xReached ? 'X' : oReached ? 'O' : null;
+      return {
+        ...s,
+        locked: Boolean(seriesWinner),
+        seriesWinner,
+      };
+    });
+  }
+
   const isCellDisabled = (value) => {
+    if (seriesLocked) return true;
     if (gameOver) return true;
     if (value) return true;
     if (mode === 'ai' && !xIsNext) return true; // Disable during AI (O) turn
@@ -494,7 +771,7 @@ export default function App() {
   // PUBLIC_INTERFACE
   function toggleTheme() {
     /** Toggle light/dark theme and persist the choice */
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+    setTheme((th) => (th === 'dark' ? 'light' : 'dark'));
   }
 
   function handleLanguageChange(e) {
@@ -502,6 +779,10 @@ export default function App() {
     if (!lng || lng === i18n.language) return;
     i18n.changeLanguage(lng);
   }
+
+  const nextRoundEnabled = seriesInProgress && gameOver && !seriesLocked;
+  const startSeriesEnabled = seriesEnabled && !seriesInProgress;
+  const endSeriesEnabled = seriesEnabled && seriesInProgress;
 
   return (
     <div className="app-root">
@@ -578,6 +859,89 @@ export default function App() {
           </div>
         </div>
 
+        {/* Series controls */}
+        <section className="series-panel" aria-label={t('series.panelAria')}>
+          <div className="series-row">
+            <label className="series-toggle">
+              <input
+                type="checkbox"
+                checked={seriesEnabled}
+                onChange={handleSeriesToggle}
+                aria-label={t('series.toggleAria')}
+              />
+              <span className="series-toggle-text">{t('series.toggleLabel')}</span>
+            </label>
+
+            <label className="select series-select">
+              <span className="select-label">{t('series.bestOf')}</span>
+              <select
+                aria-label={t('series.bestOfAria')}
+                value={seriesN}
+                onChange={handleSeriesNChange}
+                disabled={seriesInProgress} // avoid changing N mid-series by default
+              >
+                <option value={3}>3</option>
+                <option value={5}>5</option>
+                <option value={7}>7</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="series-actions" role="group" aria-label={t('series.actionsAria')}>
+            <button
+              type="button"
+              className="series-btn series-btn-primary"
+              onClick={startSeries}
+              disabled={!startSeriesEnabled}
+              aria-label={t('series.startAria')}
+            >
+              {t('series.start')}
+            </button>
+
+            <button
+              type="button"
+              className="series-btn"
+              onClick={nextRound}
+              disabled={!nextRoundEnabled}
+              aria-label={t('series.nextRoundAria')}
+            >
+              {t('series.nextRound')}
+            </button>
+
+            <button
+              type="button"
+              className="series-btn series-btn-danger"
+              onClick={endSeries}
+              disabled={!endSeriesEnabled}
+              aria-label={t('series.endAria')}
+            >
+              {t('series.end')}
+            </button>
+          </div>
+
+          {seriesStatusText && (
+            <div className={`series-status ${seriesLocked ? 'series-status-locked' : ''}`} aria-live="polite">
+              {seriesStatusText}
+            </div>
+          )}
+
+          {seriesEnabled && seriesInProgress && (
+            <div className="series-score" role="group" aria-label={t('series.scoreAria')}>
+              <div className="score">
+                <span className="score-label" aria-hidden="true">X</span>
+                <span className="score-value" aria-label={t('series.xWinsAria')}>{seriesState.seriesWins.x}</span>
+              </div>
+              <div className="score">
+                <span className="score-label" aria-hidden="true">O</span>
+                <span className="score-value" aria-label={t('series.oWinsAria')}>{seriesState.seriesWins.o}</span>
+              </div>
+              <div className="series-threshold" aria-label={t('series.thresholdAria', { threshold: neededToWinSeries })}>
+                {t('series.firstTo', { threshold: neededToWinSeries })}
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* Scoreboard */}
         <div className="scoreboard" role="group" aria-label={t('controls.scoreboardAria')}>
           <div className="score" aria-live="polite">
@@ -605,7 +969,17 @@ export default function App() {
         </div>
 
         <div
-          className={`status ${outcome === 'X' ? 'status-win' : outcome === 'O' ? 'status-win' : outcome === 'Draw' ? 'status-draw' : ''}`}
+          className={`status ${
+            seriesLocked
+              ? 'status-win'
+              : outcome === 'X'
+                ? 'status-win'
+                : outcome === 'O'
+                  ? 'status-win'
+                  : outcome === 'Draw'
+                    ? 'status-draw'
+                    : ''
+          }`}
           aria-live="polite"
           data-testid="status-text"
         >
