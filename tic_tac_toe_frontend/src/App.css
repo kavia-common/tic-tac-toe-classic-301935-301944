@@ -64,28 +64,43 @@ body {
   justify-items: center;
 }
 
-/* Simple inline controls row (e.g., sound toggle) */
+/* Simple inline controls row (e.g., sound toggle)
+   Make the whole controls area responsive:
+   - allow wrapping instead of overflowing
+   - keep groups aligned nicely on larger screens
+*/
 .controls {
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap; /* key fix: prevent overflow */
+  min-width: 0;
 }
 
-/* small grouping for right-side buttons */
+/* small grouping for right-side buttons
+   Allow wrapping + shrinking so sound/theme/lang/about never overflow.
+*/
 .inline-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap; /* key fix */
+  justify-content: flex-end;
+  min-width: 0;
 }
 
-/* selectors group */
+/* selectors group
+   Let mode/difficulty/size wrap on smaller screens.
+*/
 .selectors {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap; /* key fix */
   color: var(--muted);
+  min-width: 0;
 }
 
 .select {
@@ -96,6 +111,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px 10px;
+  min-width: 0; /* allow shrinking inside wrapped rows */
 }
 :root[data-theme="dark"] .select {
   background: #0f172a;
@@ -459,6 +475,7 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .series-btn {
@@ -852,6 +869,25 @@ body {
   letter-spacing: 0.2px;
 }
 
+@media (max-width: 520px) {
+  /* Earlier breakpoint: prevent overflow before ultra-small widths */
+  .controls {
+    justify-content: center;
+  }
+
+  /* Stack groups and let them fill available width */
+  .selectors,
+  .inline-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Let larger selects (like Language) use full width if needed */
+  .select.language-select {
+    flex: 1 1 220px;
+  }
+}
+
 @media (max-width: 420px) {
   .container {
     padding: 18px;
@@ -867,12 +903,30 @@ body {
   .restart {
     width: 100%;
   }
-  .controls {
-    flex-wrap: wrap;
+
+  /* At very small widths, make controls feel intentional and avoid tiny cramped buttons */
+  .selectors,
+  .inline-actions {
     justify-content: center;
   }
-  .inline-actions {
-    flex-wrap: wrap;
-    justify-content: center;
+
+  .sound-toggle,
+  .theme-toggle,
+  .about-btn {
+    flex: 1 1 150px; /* allow them to wrap and share space */
+  }
+
+  .select {
+    flex: 1 1 160px; /* mode/difficulty/size can wrap into columns */
+    justify-content: space-between;
+  }
+
+  .select select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .series-actions .series-btn {
+    flex: 1 1 140px; /* keep series buttons from overflowing */
   }
 }
