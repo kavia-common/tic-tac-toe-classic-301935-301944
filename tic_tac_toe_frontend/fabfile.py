@@ -1,167 +1,73 @@
 from fabric import task, Connection
-import datetime
+from invoke import Responder # Importamos Responder para interactuar con la consola
 import os
-import subprocess
-import zipfile
-import sys
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+# ========== CONFIG ==========
+# Asegúrate de que este HOST sea correcto (en tu imagen usabas kavia@SKY...)
+HOST = "kavia@121.244.192.84"      
+REMOTE_PATH = "~/qemu"         # Actualizado a la ruta vista en tus capturas
 
-HOST = "ubuntu@54.189.2.248"              # Target build VM
-REMOTE_PATH = "/home/ubuntu/tic-tac-toe-classic-301935-301944/tic_tac_toe_frontend"    # Repo path on VM
+# Definimos el "Vigilante" (Responder)
+# Cuando el script vea "login:", responderá "root" automáticamente.
+auto_login = Responder(
+    pattern=r"login:",   # Expresión regular o texto a buscar
+    response="root\n",   # Lo que escribirá (el \n es el Enter)
+)
 
-LOCAL_BASE_PATH = os.path.expanduser("~/VM")
-LOCAL_LOG_PATH = f"{LOCAL_BASE_PATH}/logs"
-LOCAL_OUTPUT_PATH = f"{LOCAL_BASE_PATH}/output"
-
-# SSH CA private key (must be mounted in Kavia session)
-CA_KEY = os.path.expanduser("~/.ssh/ca/ssh_ca")
-
-# Ephemeral SSH key (lives only during this session)
-KEY_PATH = "/tmp/kavia_build_key"
-
-SSH_CERT_TTL = "+5m"
-
-# ============================================================
-# PREP
-# ============================================================
-
-os.makedirs(LOCAL_LOG_PATH, exist_ok=True)
-os.makedirs(LOCAL_OUTPUT_PATH, exist_ok=True)
-
-
-def fatal(msg: str):
-    print(f"\n❌ FATAL: {msg}")
-    sys.exit(1)
-
-
-def run_checked(cmd: list[str], description: str):
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError:
-        fatal(f"Failed during: {description}")
-
-
-def validate_environment():
-    print("🔎 Validating environment...")
-
-    if not os.path.exists(CA_KEY):
-        fatal("SSH CA private key not found")
-
-    for binary in ["ssh-keygen"]:
-        if subprocess.run(["which", binary], capture_output=True).returncode != 0:
-            fatal(f"Required binary missing: {binary}")
-
-    print("✔️ Environment validated")
-
-
-# ============================================================
-# SSH CERT MANAGEMENT
-# ============================================================
-
-def generate_ssh_cert():
-    print("🔐 Generating ephemeral SSH key...")
-
-    run_checked(
-        ["ssh-keygen", "-f", KEY_PATH, "-N", "", "-t", "rsa", "-q"],
-        "SSH key generation"
-    )
-
-    os.chmod(KEY_PATH, 0o600)
-
-    print("🔏 Signing SSH key with CA...")
-
-    run_checked(
-        [
-            "ssh-keygen",
-            "-s", CA_KEY,
-            "-I", "kavia-build-session",
-            "-n", "ubuntu",
-            "-V", SSH_CERT_TTL,
-            f"{KEY_PATH}.pub"
-        ],
-        "SSH certificate signing"
-    )
-
-    print("✔️ Ephemeral SSH certificate ready")
-
-
-def cleanup_keys():
-    for suffix in ["", ".pub", "-cert.pub"]:
-        try:
-            os.remove(f"{KEY_PATH}{suffix}")
-        except FileNotFoundError:
-            pass
-
-
-# ============================================================
-# BUILD TASK
-# ============================================================
+# Opcional: Si quieres que el script apague la máquina después de loguearse 
+# para que el script de python termine, descomenta las siguientes líneas:
+# auto_poweroff = Responder(
+#    pattern=r"root@vdevice.*:~#", # Detecta el prompt de root
+#    response="poweroff\n",        # Manda apagar
+# )
+# ============================
 
 @task
 def build(c):
-    validate_environment()
+    print("🔎 Validating connection...")
+    conn = Connection(
+        HOST,
+        connect_kwargs={
+            "password": os.environ.get("SSH_PASSWORD"),
+        }
+    )
+    print("✔️ Connection established")
 
     try:
-        generate_ssh_cert()
-
-        print("🔌 Connecting to build VM...")
-        conn = Connection(
-            HOST,
-            connect_kwargs={"key_filename": KEY_PATH},
+        print(f"\n🚀 Launching QEMU in {REMOTE_PATH}...")
+        
+        # El comando largo de QEMU (versión sin gráficos para terminal)
+        qemu_cmd = (
+            "qemu-system-x86_64 -kernel bzImage "
+            "-append \"console=ttyS0 root=/dev/sda video=1280x720\" "
+            "-drive if=none,id=hd,file=core-image-vdevice-xfce-vdevice_x86-64-20251104054519.rootfs.ext4,format=raw "
+            "-device virtio-scsi-pci,id=scsi "
+            "-device scsi-hd,drive=hd "
+            "-smp 8 -m 4096 "
+            "-nographic "   # Importante: modo texto
+            "-vga none "
+            "-device usb-tablet "
+            "-netdev user,id=network0 -device virtio-net,netdev=network0 "
+            "-usb -device usb-host,vendorid=0x0bb4,productid=0x0a5f "
+            "-audiodev id=snd0,driver=none "
+            "-device ich9-intel-hda -device hda-duplex,audiodev=snd0 "
+            "-nic user,ipv6=off,model=e1000,id=network_0,net=10.0.8.0/24,hostfwd=tcp:127.0.0.1:5522-:22"
         )
 
-        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
-
-        local_log_file = f"{LOCAL_LOG_PATH}/build_{timestamp}.log"
-        local_zip_file = f"{LOCAL_OUTPUT_PATH}/build_{timestamp}.zip"
-        extract_path = f"{LOCAL_OUTPUT_PATH}/build_{timestamp}"
-
-        print("📥 Pulling latest code...")
-        conn.run(f"cd {REMOTE_PATH} && git pull")
-
-        print("🔨 Running build on remote VM...")
-        result = conn.run(
-            f"cd {REMOTE_PATH} && npm run build > build.log 2>&1",
-            warn=True
+        print("👀 Watching for login prompt to type 'root'...")
+        
+        # Ejecutamos el comando pasando el 'watcher'
+        # pty=True es importante para que QEMU crea que está en una terminal real
+        conn.run(
+            f"cd {REMOTE_PATH} && {qemu_cmd}", 
+            pty=True, 
+            watchers=[auto_login] 
         )
 
-        # ------------------------------------------------------------
-        # BUILD FAILED
-        # ------------------------------------------------------------
-        if result.exited != 0:
-            print("❌ Build failed. Retrieving logs...")
-
-            conn.get(f"{REMOTE_PATH}/build.log", local_log_file)
-
-            print("\n----- 🔥 BUILD LOG START -----\n")
-            with open(local_log_file) as f:
-                print(f.read())
-            print("\n----- 🔥 BUILD LOG END -----\n")
-
-            return
-
-        # ------------------------------------------------------------
-        # BUILD SUCCESS
-        # ------------------------------------------------------------
-        print("✅ Build succeeded. Packaging artifacts...")
-
-        conn.run(f"cd {REMOTE_PATH} && zip -r build.zip build")
-
-        conn.get(f"{REMOTE_PATH}/build.zip", local_zip_file)
-
-        os.makedirs(extract_path, exist_ok=True)
-
-        with zipfile.ZipFile(local_zip_file) as zip_ref:
-            zip_ref.extractall(extract_path)
-
-        os.remove(local_zip_file)
-
-        print("🎉 Build completed successfully")
-        print(f"📦 Artifacts available at: {extract_path}")
-
+        # NOTA: Como QEMU se queda corriendo, este script de Python
+        # se quedará "colgado" aquí mostrando la salida de la consola de la VM.
+        # Para salir manualmente, normalmente usarías 'Ctrl+A' soltar y luego 'x'.
+        
     finally:
-        cleanup_keys()
-        print("🧹 Ephemeral SSH material cleaned up")
+        conn.close()
+        print("🔌 Connection closed")
