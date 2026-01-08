@@ -17,6 +17,31 @@ import AboutDialog from './components/AboutDialog';
 import pkg from '../package.json';
 
 /**
+ * Global keyboard shortcut keys supported by the app.
+ * Note: We intentionally do not surface these strings via i18n to avoid
+ * changing any visible labels or impacting existing tests.
+ */
+const KEY_SHORTCUTS = {
+  restart: 'r',
+  sound: 's',
+  theme: 't',
+};
+
+/**
+ * Returns true if the current active element is a typing surface where global
+ * shortcuts should not interfere (input/textarea/select or contenteditable).
+ */
+function isTypingTargetActive() {
+  const el = typeof document !== 'undefined' ? document.activeElement : null;
+  if (!el) return false;
+
+  // contenteditable: either attribute or DOM property
+  if (el.isContentEditable) return true;
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
+/**
  * Compute the winner of a tic-tac-toe board for an NxN grid.
  *
  * Win condition: a full line (row/col/diag) of the same symbol for the given size.
@@ -351,6 +376,45 @@ export default function App() {
       // ignore
     }
   }, [seriesEnabled]);
+
+  // Global keyboard shortcuts:
+  // - R: restart current round
+  // - S: toggle sound
+  // - T: toggle light/dark theme
+  //
+  // Requirements:
+  // 1) Do not trigger when typing in input/textarea/select/contenteditable
+  // 2) Avoid interfering with other keyboard interactions (ignore modifier combos)
+  // 3) Reflect changes in existing UI state (sound/theme toggle, restart button)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      // Ignore if user is typing or using a modifier combo (Ctrl/Cmd/Alt).
+      if (isTypingTargetActive()) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // We also avoid firing shortcuts while the About dialog is open to prevent
+      // accidental changes while user is interacting with the modal.
+      if (aboutOpen) return;
+
+      const key = (e.key || '').toLowerCase();
+      if (!key) return;
+
+      if (key === KEY_SHORTCUTS.restart) {
+        // Prevent potential browser "reload" behaviors in some contexts.
+        e.preventDefault();
+        handleRestart();
+      } else if (key === KEY_SHORTCUTS.sound) {
+        e.preventDefault();
+        toggleSound();
+      } else if (key === KEY_SHORTCUTS.theme) {
+        e.preventDefault();
+        toggleTheme();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [aboutOpen, handleRestart, toggleTheme, toggleSound]);
 
   useEffect(() => {
     try {
@@ -966,7 +1030,8 @@ export default function App() {
               className="sound-toggle"
               onClick={toggleSound}
               aria-label={soundOn ? t('controls.muteSounds') : t('controls.unmuteSounds')}
-              title={soundOn ? t('controls.muteSounds') : t('controls.unmuteSounds')}
+              // Keep visible text unchanged; add shortcut hint only via title.
+              title={`${soundOn ? t('controls.muteSounds') : t('controls.unmuteSounds')} (S)`}
               data-testid="sound-toggle"
             >
               <SoundIcon on={soundOn} />
@@ -978,7 +1043,8 @@ export default function App() {
               className="theme-toggle"
               onClick={toggleTheme}
               aria-label={theme === 'dark' ? t('controls.switchToLightTheme') : t('controls.switchToDarkTheme')}
-              title={theme === 'dark' ? t('controls.switchToLightTheme') : t('controls.switchToDarkTheme')}
+              // Keep visible text unchanged; add shortcut hint only via title.
+              title={`${theme === 'dark' ? t('controls.switchToLightTheme') : t('controls.switchToDarkTheme')} (T)`}
               data-testid="theme-toggle"
             >
               <span className="icon" aria-hidden="true">{theme === 'dark' ? '🌙' : '☀️'}</span>
@@ -1217,6 +1283,7 @@ export default function App() {
           className="restart"
           onClick={handleRestart}
           aria-label={t('controls.restartAria')}
+          title={`${t('controls.restartAria')} (R)`}
           data-testid="restart-button"
         >
           {t('controls.restart')}
