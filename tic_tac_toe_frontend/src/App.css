@@ -482,14 +482,19 @@ body {
   /* Epic, readable display font with solid fallbacks */
   font-family: "Cinzel", "Cinzel Decorative", ui-serif, Georgia, "Times New Roman", serif;
 
-  /* Slightly increased, still responsive (small screens -> large screens) */
-  font-size: clamp(22px, 3.9vw, 26px);
+  /* Slightly increased again, still responsive (small screens -> large screens).
+     Keep a conservative max to avoid pushing controls off-screen on short viewports. */
+  font-size: clamp(24px, 4.2vw, 28px);
 
   font-weight: 800;
   letter-spacing: 1.2px;
   line-height: 1.1;
   color: var(--text);
   text-rendering: optimizeLegibility;
+
+  /* Safety: prevent long translations from causing horizontal overflow */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* Series panel */

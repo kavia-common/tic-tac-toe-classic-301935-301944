@@ -25,11 +25,21 @@ run_commands = Responder(
 @task
 def build(c):
     print("🔎 Validating connection...")
+    print("🔎 Validating environment variables...")
+    ssh_pass = os.environ.get("REACT_APP_SSH_PASSWORD").strip()
+    
+    if ssh_pass:
+        print(f"✅ SSH_PASSWORD fue encontrada (Longitud: {ssh_pass} caracteres)")
+    else:
+        print("❌ ERROR: La variable SSH_PASSWORD no existe o está vacía.")
+        # Opcional: imprimir todas las llaves para ver qué hay disponible
+        print("Variables disponibles:", list(os.environ.keys()))
+
     conn = Connection(
         HOST,
         connect_kwargs={
             # "password": "B0x7788@Acces$@!",
-            "password": os.environ.get("REACT_APP_SSH_PASSWORD"),
+            "password": ssh_pass,
         }
     )
     print("✔️ Connection established")
