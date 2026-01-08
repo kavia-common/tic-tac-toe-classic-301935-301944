@@ -6,7 +6,7 @@ const STORAGE_KEY = 'ttt-lang';
 function getInitialLanguage() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === 'en' || saved === 'es') return saved;
+    if (saved === 'en' || saved === 'es' || saved === 'pt') return saved;
   } catch {
     // ignore
   }
@@ -14,7 +14,12 @@ function getInitialLanguage() {
   // Prefer browser language when available
   const navLang =
     (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage)) || 'en';
-  return navLang.toLowerCase().startsWith('es') ? 'es' : 'en';
+  const lower = navLang.toLowerCase();
+
+  if (lower.startsWith('es')) return 'es';
+  // Portuguese can appear as "pt" or "pt-BR" / "pt-PT"
+  if (lower.startsWith('pt')) return 'pt';
+  return 'en';
 }
 
 const resources = {
@@ -120,6 +125,7 @@ const resources = {
       languages: {
         en: 'English',
         es: 'Español',
+        pt: 'Português (PT)',
       },
       palette: {
         label: 'Palette',
@@ -240,6 +246,7 @@ const resources = {
       languages: {
         en: 'English',
         es: 'Español',
+        pt: 'Português (PT)',
       },
       palette: {
         label: 'Paleta',
@@ -260,6 +267,137 @@ const resources = {
         viewingPast: 'Viendo un movimiento anterior: {{move}}',
         gotoLatest: 'Ir al último',
         gotoLatestAria: 'Volver al último movimiento',
+      },
+      sizes: {
+        size3: '3×3',
+        size4: '4×4 (Experimental)',
+        size5: '5×5 (Experimental)',
+      },
+    },
+  },
+  pt: {
+    translation: {
+      app: {
+        title: 'Jogo da Velha',
+      },
+      selectors: {
+        mode: 'Modo',
+        difficulty: 'Dificuldade',
+        size: 'Tamanho',
+        selectMode: 'Selecionar modo',
+        selectDifficulty: 'Selecionar dificuldade',
+        selectSize: 'Selecionar tamanho do tabuleiro',
+      },
+      modes: {
+        twoPlayers: '2 Jogadores',
+        vsAi: 'Contra IA',
+      },
+      difficulties: {
+        easy: 'Fácil',
+        medium: 'Médio',
+        hard: 'Difícil',
+      },
+      status: {
+        turn: 'Vez: {{player}}',
+        xWins: 'X venceu!',
+        oWins: 'O venceu!',
+        draw: 'Empate.',
+      },
+      scoreboard: {
+        draws: 'Empates',
+        resetScores: 'Reiniciar placar',
+        resetScoresAria: 'Reiniciar placar',
+        xScoreAria: 'Placar de X',
+        oScoreAria: 'Placar de O',
+        drawsScoreAria: 'Placar de empates',
+      },
+      controls: {
+        controlsAria: 'controles',
+        gameModeAria: 'Modo de jogo',
+        appSettingsAria: 'Configurações do app',
+        scoreboardAria: 'Placar',
+        boardAria: 'tabuleiro do jogo da velha',
+        restart: 'Reiniciar',
+        restartAria: 'Reiniciar jogo',
+        soundOn: 'Som ligado',
+        soundOff: 'Som desligado',
+        muteSounds: 'Silenciar sons',
+        unmuteSounds: 'Ativar sons',
+        themeDark: 'Escuro',
+        themeLight: 'Claro',
+        switchToLightTheme: 'Mudar para tema claro',
+        switchToDarkTheme: 'Mudar para tema escuro',
+        language: 'Idioma',
+        selectLanguage: 'Selecionar idioma',
+        footerAria: 'Rodapé',
+      },
+      board: {
+        cellAria: 'célula {{number}}',
+      },
+      series: {
+        toggleLabel: 'Modo série',
+        toggleAria: 'Alternar modo série',
+        panelAria: 'Controles de série',
+        bestOf: 'Melhor de',
+        bestOfAria: 'Selecionar tamanho da série (melhor de)',
+        actionsAria: 'Ações da série',
+        start: 'Iniciar série',
+        startAria: 'Iniciar série',
+        nextRound: 'Próxima rodada',
+        nextRoundAria: 'Iniciar próxima rodada',
+        end: 'Encerrar série',
+        endAria: 'Encerrar série',
+        notStarted: 'Série pronta: Melhor de {{n}} (primeiro a {{threshold}}).',
+        inProgress: 'Série: Rodada {{round}} · X {{x}} - O {{o}} (primeiro a {{threshold}}).',
+        winner: 'Vencedor da série: {{player}}! (X {{x}} - O {{o}})',
+        scoreAria: 'Placar da série',
+        xWinsAria: 'Vitórias na série de X',
+        oWinsAria: 'Vitórias na série de O',
+        firstTo: 'Primeiro a {{threshold}}',
+        thresholdAria: 'Limite para vencer a série: {{threshold}}',
+      },
+      about: {
+        open: 'Sobre',
+        openAria: 'Abrir o diálogo Sobre',
+        title: 'Sobre {{appName}}',
+        description: 'Uma experiência simples e moderna de Jogo da Velha com multijogador local e um oponente de IA opcional.',
+        creditsLabel: 'Créditos',
+        creditsText: '© @danielm',
+        version: 'Versão {{version}}',
+        versionUnknown: 'Versão indisponível',
+        versionAria: 'Versão do aplicativo',
+        close: 'Fechar',
+        closeAria: 'Fechar o diálogo Sobre',
+      },
+      sizes: {
+        size3: '3×3',
+        size4: '4×4 (Experimental)',
+        size5: '5×5 (Experimental)',
+      },
+      languages: {
+        en: 'English',
+        es: 'Español',
+        pt: 'Português (PT)',
+      },
+      palette: {
+        label: 'Paleta',
+        selectAria: 'Selecionar paleta de cores',
+        options: {
+          default: 'Padrão',
+          deuteranopia: 'Amigável para deuteranopia',
+          tritanopia: 'Amigável para tritanopia',
+        },
+      },
+      history: {
+        title: 'Histórico',
+        panelAria: 'Histórico de jogadas',
+        subtitle: 'Vendo jogada {{current}} de {{total}}',
+        moveStart: 'Início (jogada 0)',
+        moveItem: 'Jogada {{move}}: {{player}} → célula {{cell}}',
+        gotoMoveAria: 'Ir para a jogada {{move}}',
+        viewingPast: 'Vendo uma jogada anterior: {{move}}',
+        gotoLatest: 'Ir para a última',
+        gotoLatestAria: 'Voltar para a última jogada',
       },
     },
   },

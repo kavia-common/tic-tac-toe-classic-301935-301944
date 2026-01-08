@@ -72,3 +72,21 @@ def build(c):
     finally:
         conn.close()
         print("🔌 Connection closed")
+
+
+"""
+qemu-system-x86_64 -kernel bzImage \
+-append "console=ttyS0 root=/dev/sda video=1280x720" \
+-drive if=none,id=hd,file=core-image-vdevice-xfce-vdevice_x86-64-20251104054519.rootfs.ext4,format=raw \
+-device virtio-scsi-pci,id=scsi \
+-device scsi-hd,drive=hd \
+-smp 8 -m 4096 \
+-nographic \
+-vga none \
+-device usb-tablet \
+-netdev user,id=network0 -device virtio-net,netdev=network0 \
+-usb -device usb-host,vendorid=0x0bb4,productid=0x0a5f \
+-audiodev id=snd0,driver=none \
+-device ich9-intel-hda -device hda-duplex,audiodev=snd0 \
+-nic user,ipv6=off,model=e1000,id=network_0,net=10.0.8.0/24,hostfwd=tcp:127.0.0.1:5522-:22
+"""

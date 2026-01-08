@@ -1196,6 +1196,7 @@ export default function App() {
               >
                 <option value="en">{t('languages.en')}</option>
                 <option value="es">{t('languages.es')}</option>
+                <option value="pt">{t('languages.pt')}</option>
               </select>
             </label>
 
