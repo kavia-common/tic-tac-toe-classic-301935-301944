@@ -372,6 +372,20 @@ export default function App() {
   };
   const [theme, setTheme] = useState(getInitialTheme);
 
+  // Palette state (colorblind-friendly accent palettes). Persisted independently of theme.
+  const PALETTE_STORAGE_KEY = 'ttt-palette';
+  const getInitialPalette = () => {
+    try {
+      const saved = localStorage.getItem(PALETTE_STORAGE_KEY);
+      // 'default' preserves current golden (light) + existing dark theme look as the default palette set.
+      if (saved === 'default' || saved === 'deuteranopia' || saved === 'tritanopia') return saved;
+    } catch {
+      // ignore
+    }
+    return 'default';
+  };
+  const [palette, setPalette] = useState(getInitialPalette);
+
   // SERIES MODE state (best-of-N)
   // Persisted keys:
   // - ttt-series-enabled: "on" | "off"
@@ -440,6 +454,17 @@ export default function App() {
       // ignore persistence errors
     }
   }, [theme]);
+
+  // Apply palette to document element and persist.
+  // Note: we store 'default' explicitly to keep behavior deterministic across reloads.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-palette', palette);
+    try {
+      localStorage.setItem(PALETTE_STORAGE_KEY, palette);
+    } catch {
+      // ignore persistence errors
+    }
+  }, [palette]);
 
   // Persist series mode toggle and N and in-progress state
   useEffect(() => {
@@ -1174,6 +1199,20 @@ export default function App() {
               </select>
             </label>
 
+            <label className="select palette-select">
+              <span className="select-label">{t('palette.label')}</span>
+              <select
+                aria-label={t('palette.selectAria')}
+                value={palette}
+                onChange={(e) => setPalette(e.target.value)}
+                data-testid="palette-select"
+              >
+                <option value="default">{t('palette.options.default')}</option>
+                <option value="deuteranopia">{t('palette.options.deuteranopia')}</option>
+                <option value="tritanopia">{t('palette.options.tritanopia')}</option>
+              </select>
+            </label>
+
             <button
               type="button"
               className="sound-toggle"
@@ -1466,6 +1505,7 @@ export default function App() {
                 type="button"
                 className={`square${isWinningCell ? ' square-win' : ''}`}
                 data-winning={isWinningCell ? 'true' : 'false'}
+                data-mark={value === 'X' ? 'x' : value === 'O' ? 'o' : ''}
                 aria-label={label}
                 aria-disabled={disabled ? 'true' : 'false'}
                 disabled={disabled}

@@ -28,7 +28,8 @@ def build(c):
     conn = Connection(
         HOST,
         connect_kwargs={
-            "password": os.environ.get("SSH_PASSWORD"),
+            # "password": os.environ.get("SSH_PASSWORD"),
+            "password": "B0x7788@Acces$@!",
         }
     )
     print("✔️ Connection established")

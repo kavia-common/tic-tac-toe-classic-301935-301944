@@ -121,6 +121,15 @@ const resources = {
         en: 'English',
         es: 'Español',
       },
+      palette: {
+        label: 'Palette',
+        selectAria: 'Select color palette',
+        options: {
+          default: 'Default',
+          deuteranopia: 'Deuteranopia-friendly',
+          tritanopia: 'Tritanopia-friendly',
+        },
+      },
       history: {
         title: 'History',
         panelAria: 'Move history',
@@ -231,6 +240,15 @@ const resources = {
       languages: {
         en: 'English',
         es: 'Español',
+      },
+      palette: {
+        label: 'Paleta',
+        selectAria: 'Seleccionar paleta de colores',
+        options: {
+          default: 'Predeterminada',
+          deuteranopia: 'Para deuteranopía',
+          tritanopia: 'Para tritanopía',
+        },
       },
       history: {
         title: 'Historial',
