@@ -182,22 +182,65 @@ function getAiMove(sq, difficulty, size) {
     return randomMove(sq);
   }
 
-  // Medium: win -> block -> center -> corner -> random
-  // Note: Center is a single cell only for odd sizes; for even sizes we skip direct center and rely on corners/random.
+  // Medium: intentionally imperfect heuristic.
+  // Goal: make Medium feel a bit easier without changing Easy/Hard.
+  //
+  // Strategy:
+  // - Only take immediate wins/blocks some of the time.
+  // - Otherwise, prefer "weaker but valid" moves (sides/random), with a small chance to still take center/corners.
+  // This works across 3x3, 4x4, 5x5.
   if (difficulty === 'medium') {
+    const available = getAvailableMoves(sq);
+    if (available.length === 0) return null;
+
+    // Tunable imperfection factor:
+    // - 0.65 means: 65% chance to play an immediate win or an immediate block (when available),
+    //   otherwise skip it and play a less optimal move.
+    const TACTICAL_PROB = 0.65;
+
+    // Helper: sides are non-corner edge cells (only meaningful for n>=3).
+    const pickSide = () => {
+      const sides = [];
+      if (n < 3) return null;
+
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          const idx = r * n + c;
+          if (sq[idx]) continue;
+
+          const isCorner = (r === 0 || r === n - 1) && (c === 0 || c === n - 1);
+          const isEdge = r === 0 || r === n - 1 || c === 0 || c === n - 1;
+
+          if (isEdge && !isCorner) sides.push(idx);
+        }
+      }
+
+      if (sides.length === 0) return null;
+      return sides[Math.floor(Math.random() * sides.length)];
+    };
+
+    // 1) Sometimes: take immediate win
     const win = canWinNextMove(sq, 'O', n);
-    if (win !== null) return win;
+    if (win !== null && Math.random() < TACTICAL_PROB) return win;
 
+    // 2) Sometimes: block immediate loss
     const block = canWinNextMove(sq, 'X', n);
-    if (block !== null) return block;
+    if (block !== null && Math.random() < TACTICAL_PROB) return block;
 
-    if (n % 2 === 1) {
+    // 3) Otherwise, play a less optimal but valid move more often.
+    // Prefer side moves to reduce strength on 3x3 and remain consistent for larger boards.
+    const side = pickSide();
+    if (side !== null && Math.random() < 0.6) return side;
+
+    // 4) Occasionally still take center on odd sizes (keeps Medium from feeling "broken")
+    if (n % 2 === 1 && Math.random() < 0.35) {
       const center = Math.floor((n * n) / 2);
       if (!sq[center]) return center;
     }
 
+    // 5) Occasionally take a corner; otherwise random.
     const corner = pickCorner(sq, n);
-    if (corner !== null) return corner;
+    if (corner !== null && Math.random() < 0.5) return corner;
 
     return randomMove(sq);
   }
