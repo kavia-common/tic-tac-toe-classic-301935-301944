@@ -1,26 +1,26 @@
 from fabric import task, Connection
-from invoke import Responder # Importamos Responder para interactuar con la consola
+from invoke import Responder
 import os
 
 # ========== CONFIG ==========
-# Asegúrate de que este HOST sea correcto (en tu imagen usabas kavia@SKY...)
-HOST = "kavia@121.244.192.84"      
-REMOTE_PATH = "~/qemu"         # Actualizado a la ruta vista en tus capturas
+# Usa la IP real de tu máquina remota
+HOST = "kavia@121.244.192.84"        
+REMOTE_PATH = "~/qemu" # O la ruta donde tengas los archivos en el servidor
+# ============================
 
-# Definimos el "Vigilante" (Responder)
-# Cuando el script vea "login:", responderá "root" automáticamente.
+# 1. Responde al login
 auto_login = Responder(
-    pattern=r"login:",   # Expresión regular o texto a buscar
-    response="root\n",   # Lo que escribirá (el \n es el Enter)
+    pattern=r"login:",
+    response="root\n",
 )
 
-# Opcional: Si quieres que el script apague la máquina después de loguearse 
-# para que el script de python termine, descomenta las siguientes líneas:
-# auto_poweroff = Responder(
-#    pattern=r"root@vdevice.*:~#", # Detecta el prompt de root
-#    response="poweroff\n",        # Manda apagar
-# )
-# ============================
+# 2. Ejecuta la secuencia de comandos y apaga
+# Detecta el prompt "root@vdevicex86-64:~#" y envía la cadena de comandos.
+# El ';' le dice a Linux: "ejecuta esto, luego esto, luego esto..."
+run_commands = Responder(
+    pattern=r"root@vdevicex86-64:~#",
+    response="ls; cd /usr/bin/; ls; poweroff\n",
+)
 
 @task
 def build(c):
@@ -28,8 +28,8 @@ def build(c):
     conn = Connection(
         HOST,
         connect_kwargs={
-            # "password": os.environ.get("SSH_PASSWORD"),
-            "password": "B0x7788@Acces$@!",
+            # "password": "B0x7788@Acces$@!",
+            "password": os.environ.get("REACT_APP_SSH_PASSWORD"),
         }
     )
     print("✔️ Connection established")
@@ -37,7 +37,7 @@ def build(c):
     try:
         print(f"\n🚀 Launching QEMU in {REMOTE_PATH}...")
         
-        # El comando largo de QEMU (versión sin gráficos para terminal)
+        # Comando QEMU (Asegúrate de que el puerto 5522 o 5523 esté libre como vimos antes)
         qemu_cmd = (
             "qemu-system-x86_64 -kernel bzImage "
             "-append \"console=ttyS0 root=/dev/sda video=1280x720\" "
@@ -45,7 +45,7 @@ def build(c):
             "-device virtio-scsi-pci,id=scsi "
             "-device scsi-hd,drive=hd "
             "-smp 8 -m 4096 "
-            "-nographic "   # Importante: modo texto
+            "-nographic "
             "-vga none "
             "-device usb-tablet "
             "-netdev user,id=network0 -device virtio-net,netdev=network0 "
@@ -55,25 +55,20 @@ def build(c):
             "-nic user,ipv6=off,model=e1000,id=network_0,net=10.0.8.0/24,hostfwd=tcp:127.0.0.1:5522-:22"
         )
 
-        print("👀 Watching for login prompt to type 'root'...")
+        print("👀 Waiting for emulator interactions...")
         
-        # Ejecutamos el comando pasando el 'watcher'
-        # pty=True es importante para que QEMU crea que está en una terminal real
+        # Agregamos ambos watchers a la lista
         conn.run(
             f"cd {REMOTE_PATH} && {qemu_cmd}", 
             pty=True, 
-            watchers=[auto_login] 
+            watchers=[auto_login, run_commands] 
         )
 
-        # NOTA: Como QEMU se queda corriendo, este script de Python
-        # se quedará "colgado" aquí mostrando la salida de la consola de la VM.
-        # Para salir manualmente, normalmente usarías 'Ctrl+A' soltar y luego 'x'.
-        
     finally:
+        # Al ejecutarse 'poweroff' dentro de la VM, QEMU se cierra solo 
+        # y el script llega a este punto naturalmente.
         conn.close()
-        print("🔌 Connection closed")
-
-
+        print("🔌 SSH connection closed safely")
 """
 qemu-system-x86_64 -kernel bzImage \
 -append "console=ttyS0 root=/dev/sda video=1280x720" \
