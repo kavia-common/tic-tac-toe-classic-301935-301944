@@ -300,6 +300,36 @@ export default function App() {
   /** True if it's X's turn, false for O's turn */
   const [xIsNext, setXIsNext] = useState(true);
 
+  /**
+   * Move history (time-travel) is tracked per-round only and is never persisted.
+   * Each entry represents the board state AFTER a move is applied.
+   *
+   * - history[0] is the initial empty board
+   * - currentHistoryIndex points to the state currently being viewed
+   */
+  const [history, setHistory] = useState(() => [
+    {
+      squares: Array(3 * 3).fill(null),
+      // meta for move that produced this state; null for initial state
+      move: null,
+      xIsNext: true,
+    },
+  ]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+
+  const viewingPast = currentHistoryIndex !== history.length - 1;
+
+  const goToLatest = () => {
+    // Return to latest state; resume play from that state.
+    setCurrentHistoryIndex((_) => history.length - 1);
+  };
+
+  const goToHistoryIndex = (idx) => {
+    if (!Number.isInteger(idx)) return;
+    if (idx < 0 || idx >= history.length) return;
+    setCurrentHistoryIndex(idx);
+  };
+
   // Mode and difficulty
   const [mode, setMode] = useState('2p'); // '2p' | 'ai'
   const [difficulty, setDifficulty] = useState('medium'); // 'easy' | 'medium' | 'hard'
@@ -477,7 +507,7 @@ export default function App() {
 
   const boardCellCount = boardSize * boardSize;
 
-  // Determine game status with winning line info (NxN)
+  // Determine game status with winning line info (NxN) for the currently viewed state.
   const evaluation = useMemo(() => evaluateBoardDetailed(squares, boardSize), [squares, boardSize]);
   const outcome = evaluation.winner;
   const winningLine = evaluation.line; // null for draw or in-progress
@@ -487,6 +517,10 @@ export default function App() {
   const seriesInProgress = seriesEnabled && seriesState.inProgress;
   const seriesLocked = seriesInProgress && seriesState.locked;
   const neededToWinSeries = useMemo(() => seriesThreshold(seriesN), [seriesN]);
+
+  // Only allow round completion side-effects (score increments, series increments, win/draw sounds/confetti)
+  // when the user is viewing the latest move.
+  const allowRoundEffects = !viewingPast;
 
   // Series score should only be visible/meaningful when series is enabled.
   const seriesStatusText = useMemo(() => {
@@ -549,6 +583,7 @@ export default function App() {
   // Increment appropriate persistent score when a game ends
   const prevOutcomeRef = useRef(null);
   useEffect(() => {
+    if (!allowRoundEffects) return;
     if (!gameOver) return;
     if (prevOutcomeRef.current === outcome) return;
     prevOutcomeRef.current = outcome;
@@ -559,7 +594,7 @@ export default function App() {
     } else if (outcome === 'Draw') {
       setScores((s) => ({ ...s, draws: s.draws + 1 }));
     }
-  }, [gameOver, outcome]);
+  }, [allowRoundEffects, gameOver, outcome]);
 
   // Update series score at end of round (only when in a series).
   const prevSeriesOutcomeRef = useRef(null);
@@ -568,6 +603,7 @@ export default function App() {
       prevSeriesOutcomeRef.current = null;
       return;
     }
+    if (!allowRoundEffects) return;
     if (!gameOver) return;
     if (prevSeriesOutcomeRef.current === outcome) return;
 
@@ -595,12 +631,16 @@ export default function App() {
       });
     }
     // Draws do not count towards series threshold
-  }, [seriesInProgress, gameOver, outcome, seriesN]);
+  }, [seriesInProgress, allowRoundEffects, gameOver, outcome, seriesN]);
 
   // Trigger confetti for series win (separate from per-round win)
   const seriesConfettiLaunchedRef = useRef(false);
   useEffect(() => {
     if (!seriesInProgress) {
+      seriesConfettiLaunchedRef.current = false;
+      return;
+    }
+    if (!allowRoundEffects) {
       seriesConfettiLaunchedRef.current = false;
       return;
     }
@@ -623,7 +663,7 @@ export default function App() {
     confetti({ ...defaults, particleCount: 90, origin: { y: 0.25 } });
     setTimeout(() => confetti({ ...defaults, particleCount: 120, origin: { y: 0.2 } }), 160);
     setTimeout(() => confetti({ ...defaults, particleCount: 140, origin: { y: 0.18 } }), 320);
-  }, [seriesInProgress, seriesState.seriesWinner, seriesState.seriesWins]);
+  }, [seriesInProgress, allowRoundEffects, seriesState.seriesWinner, seriesState.seriesWins]);
 
   // PUBLIC_INTERFACE
   function resetScores() {
@@ -711,6 +751,7 @@ export default function App() {
 
   // Play draw sound exactly once when transitioning into draw state
   useEffect(() => {
+    if (!allowRoundEffects) return;
     if (outcome === 'Draw' && lastOutcomeRef.current !== 'Draw') {
       lastOutcomeRef.current = 'Draw';
       if (soundOn) {
@@ -725,12 +766,14 @@ export default function App() {
     } else if (outcome !== 'Draw') {
       lastOutcomeRef.current = outcome;
     }
-  }, [outcome, soundOn]);
+  }, [allowRoundEffects, outcome, soundOn]);
 
   // Play win sound once when transitioning to a winner (X or O) and trigger confetti
   const confettiLaunchedRef = useRef(false);
 
   useEffect(() => {
+    if (!allowRoundEffects) return;
+
     // Only act on actual wins
     const isWin = outcome === 'X' || outcome === 'O';
     if (isWin && lastOutcomeRef.current !== outcome) {
@@ -768,11 +811,16 @@ export default function App() {
       // Clear flag when leaving win state (e.g., on restart/new round), so next win can fire again.
       confettiLaunchedRef.current = false;
     }
-  }, [outcome, soundOn]);
+  }, [allowRoundEffects, outcome, soundOn]);
 
   // Trigger AI move after human 'X' moves in Vs AI mode, if game not over (and series not locked)
+  // NOTE: AI is disabled while viewing past history states; it resumes only on the latest move.
   useEffect(() => {
     if (mode !== 'ai') {
+      setPendingAi(false);
+      return;
+    }
+    if (viewingPast) {
       setPendingAi(false);
       return;
     }
@@ -799,13 +847,22 @@ export default function App() {
           if (move === null || prev[move]) return prev;
           const next = prev.slice();
           next[move] = 'O';
+
+          // Record AI move in history (only when not time-traveling; effect is guarded above).
+          const moveNumber = currentHistoryIndex + 1;
+          setHistory((h) => [
+            ...h,
+            { squares: next, move: { index: move, player: 'O', moveNumber }, xIsNext: true },
+          ]);
+          setCurrentHistoryIndex((_) => currentHistoryIndex + 1);
+
           return next;
         });
         setXIsNext(true); // After AI (O), next is X
       }, 250);
       return () => clearTimeout(tmr);
     }
-  }, [mode, xIsNext, squares, difficulty, gameOver, seriesLocked]);
+  }, [mode, xIsNext, squares, difficulty, gameOver, seriesLocked, viewingPast]);
 
   // PUBLIC_INTERFACE
   function handleSquareClick(index) {
@@ -814,18 +871,60 @@ export default function App() {
     if (squares[index] || gameOver) return;
     if (seriesLocked) return;
     if (mode === 'ai' && !xIsNext) return; // Block clicks during AI turn
-    const next = squares.slice();
-    next[index] = xIsNext ? 'X' : 'O';
-    setSquares(next);
+    if (pendingAi) return;
+
+    const player = xIsNext ? 'X' : 'O';
+    const moveNumber = currentHistoryIndex + 1; // since index 0 is "start"
+    const nextSquares = squares.slice();
+    nextSquares[index] = player;
+
+    // If user is time-traveling and then plays a move, truncate future history (branching).
+    setHistory((h) => {
+      const base = h.slice(0, currentHistoryIndex + 1);
+      return [
+        ...base,
+        {
+          squares: nextSquares,
+          move: { index, player, moveNumber },
+          xIsNext: !xIsNext,
+        },
+      ];
+    });
+
+    // Advance to latest state
+    setCurrentHistoryIndex((_) => currentHistoryIndex + 1);
+
+    setSquares(nextSquares);
     setXIsNext(!xIsNext);
   }
+
+  // Keep currently-viewed state in sync with the time-travel index.
+  useEffect(() => {
+    const entry = history[currentHistoryIndex];
+    if (!entry) return;
+
+    // Sync only if different to avoid redundant renders.
+    setSquares(entry.squares);
+    setXIsNext(entry.xIsNext);
+
+    // If time-traveling, ensure AI is not "pending".
+    if (currentHistoryIndex !== history.length - 1) {
+      setPendingAi(false);
+    }
+  }, [currentHistoryIndex, history]);
 
   // PUBLIC_INTERFACE
   function handleRestart() {
     /** Reset the board to initial state (per-round restart; does not modify series state) */
-    setSquares(Array(boardSize * boardSize).fill(null));
+    const empty = Array(boardSize * boardSize).fill(null);
+    setSquares(empty);
     setXIsNext(true);
     setPendingAi(false);
+
+    // Clear per-round history (requirement: restart clears history; no persistence between rounds).
+    setHistory([{ squares: empty, move: null, xIsNext: true }]);
+    setCurrentHistoryIndex(0);
+
     lastOutcomeRef.current = null;
     prevOutcomeRef.current = null;
     prevSeriesOutcomeRef.current = null;
@@ -855,9 +954,15 @@ export default function App() {
     });
 
     // Reset round state + board for new size.
-    setSquares(Array(nextSize * nextSize).fill(null));
+    const empty = Array(nextSize * nextSize).fill(null);
+    setSquares(empty);
     setXIsNext(true);
     setPendingAi(false);
+
+    // Reset per-round history for the new size.
+    setHistory([{ squares: empty, move: null, xIsNext: true }]);
+    setCurrentHistoryIndex(0);
+
     lastOutcomeRef.current = null;
     prevOutcomeRef.current = null;
     prevSeriesOutcomeRef.current = null;
@@ -946,6 +1051,7 @@ export default function App() {
   }
 
   const isCellDisabled = (value) => {
+    if (viewingPast) return true; // time-travel view is read-only
     if (seriesLocked) return true;
     if (gameOver) return true;
     if (value) return true;
@@ -1220,21 +1326,74 @@ export default function App() {
 
         <div
           className={`status ${
-            seriesLocked
-              ? 'status-win'
-              : outcome === 'X'
+            viewingPast
+              ? 'status-draw'
+              : seriesLocked
                 ? 'status-win'
-                : outcome === 'O'
+                : outcome === 'X'
                   ? 'status-win'
-                  : outcome === 'Draw'
-                    ? 'status-draw'
-                    : ''
+                  : outcome === 'O'
+                    ? 'status-win'
+                    : outcome === 'Draw'
+                      ? 'status-draw'
+                      : ''
           }`}
           aria-live="polite"
           data-testid="status-text"
         >
-          {statusText}
+          {viewingPast ? t('history.viewingPast', { move: currentHistoryIndex }) : statusText}
         </div>
+
+        {/* History (time-travel) */}
+        <section className="history-panel" aria-label={t('history.panelAria')}>
+          <div className="history-header">
+            <div>
+              <h2 className="history-title">{t('history.title')}</h2>
+              <div className="history-subtitle" aria-live="polite">
+                {t('history.subtitle', { current: currentHistoryIndex, total: Math.max(history.length - 1, 0) })}
+              </div>
+            </div>
+
+            <div className="history-actions">
+              <button
+                type="button"
+                className="goto-latest"
+                onClick={goToLatest}
+                disabled={!viewingPast}
+                aria-label={t('history.gotoLatestAria')}
+                data-testid="goto-latest"
+              >
+                {t('history.gotoLatest')}
+              </button>
+            </div>
+          </div>
+
+          <div className="history-list" data-testid="history-list">
+            {history.map((entry, idx) => {
+              const label =
+                idx === 0
+                  ? t('history.moveStart')
+                  : t('history.moveItem', {
+                      move: idx,
+                      player: entry?.move?.player ?? '?',
+                      cell: (entry?.move?.index ?? 0) + 1,
+                    });
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  className={`history-item${idx === currentHistoryIndex ? ' history-item-current' : ''}`}
+                  onClick={() => goToHistoryIndex(idx)}
+                  aria-label={t('history.gotoMoveAria', { move: idx }) + `: ${label}`}
+                  data-testid={`history-item-${idx}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
         <div
           className="board"

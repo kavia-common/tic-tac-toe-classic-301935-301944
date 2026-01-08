@@ -930,3 +930,119 @@ body {
     flex: 1 1 140px; /* keep series buttons from overflowing */
   }
 }
+
+/* ============================================================
+   History (Time-travel) panel
+   - Per-round only: not persisted
+   - Styled to match existing panels (scoreboard/series/status)
+   ============================================================ */
+.history-panel {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+:root[data-theme="dark"] .history-panel {
+  background: #0f172a;
+}
+
+.history-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.history-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.history-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.goto-latest {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease, opacity 120ms ease;
+}
+.goto-latest:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+:root[data-theme="dark"] .goto-latest:hover:not(:disabled) {
+  background: #111827;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+.goto-latest:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.goto-latest:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease, opacity 120ms ease;
+}
+.history-item:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+:root[data-theme="dark"] .history-item:hover:not(:disabled) {
+  background: #111827;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+.history-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+.history-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.history-item-current {
+  border-style: solid;
+  border-color: var(--primary);
+  background: rgba(245, 158, 11, 0.10);
+}
+:root[data-theme="dark"] .history-item-current {
+  background: rgba(96, 165, 250, 0.12);
+}
