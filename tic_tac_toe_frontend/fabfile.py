@@ -1,22 +1,25 @@
 from fabric import task, Connection
 from invoke import Responder
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ========== CONFIG ==========
-# Usa la IP real de tu máquina remota
 HOST = "kavia@121.244.192.84"        
-REMOTE_PATH = "~/qemu" # O la ruta donde tengas los archivos en el servidor
+REMOTE_PATH = "~/qemu" # Or the path where your files are located on the server
 # ============================
 
-# 1. Responde al login
+# 1. Respond to login
 auto_login = Responder(
     pattern=r"login:",
     response="root\n",
 )
 
-# 2. Ejecuta la secuencia de comandos y apaga
-# Detecta el prompt "root@vdevicex86-64:~#" y envía la cadena de comandos.
-# El ';' le dice a Linux: "ejecuta esto, luego esto, luego esto..."
+# 2. Execute command sequence and power off
+# Detects the prompt "root@vdevicex86-64:~#" and sends the command string.
+# The ';' tells Linux: "run this, then this, then this..."
 run_commands = Responder(
     pattern=r"root@vdevicex86-64:~#",
     response="ls; cd /usr/bin/; ls; poweroff\n",
@@ -26,19 +29,18 @@ run_commands = Responder(
 def build(c):
     print("🔎 Validating connection...")
     print("🔎 Validating environment variables...")
-    ssh_pass = os.environ.get("REACT_APP_SSH_PASSWORD").strip()
+    ssh_pass = os.environ.get("REACT_APP_SSH_PASSWORD", "").strip()
     
     if ssh_pass:
-        print(f"✅ SSH_PASSWORD fue encontrada (Longitud: {ssh_pass} caracteres)")
+        print(f"✅ REACT_APP_SSH_PASSWORD found (Length: {len(ssh_pass)} characters)")
     else:
-        print("❌ ERROR: La variable SSH_PASSWORD no existe o está vacía.")
-        # Opcional: imprimir todas las llaves para ver qué hay disponible
-        print("Variables disponibles:", list(os.environ.keys()))
+        print("❌ ERROR: REACT_APP_SSH_PASSWORD variable does not exist or is empty.")
+        # Optional: print all keys to see what is available
+        print("Available variables:", list(os.environ.keys()))
 
     conn = Connection(
         HOST,
         connect_kwargs={
-            # "password": "B0x7788@Acces$@!",
             "password": ssh_pass,
         }
     )
@@ -46,8 +48,7 @@ def build(c):
 
     try:
         print(f"\n🚀 Launching QEMU in {REMOTE_PATH}...")
-        
-        # Comando QEMU (Asegúrate de que el puerto 5522 o 5523 esté libre como vimos antes)
+         
         qemu_cmd = (
             "qemu-system-x86_64 -kernel bzImage "
             "-append \"console=ttyS0 root=/dev/sda video=1280x720\" "
@@ -67,7 +68,7 @@ def build(c):
 
         print("👀 Waiting for emulator interactions...")
         
-        # Agregamos ambos watchers a la lista
+        # Add both watchers to the list
         conn.run(
             f"cd {REMOTE_PATH} && {qemu_cmd}", 
             pty=True, 
@@ -75,23 +76,7 @@ def build(c):
         )
 
     finally:
-        # Al ejecutarse 'poweroff' dentro de la VM, QEMU se cierra solo 
-        # y el script llega a este punto naturalmente.
+        # When 'poweroff' runs inside the VM, QEMU closes automatically 
+        # and the script reaches this point naturally.
         conn.close()
         print("🔌 SSH connection closed safely")
-"""
-qemu-system-x86_64 -kernel bzImage \
--append "console=ttyS0 root=/dev/sda video=1280x720" \
--drive if=none,id=hd,file=core-image-vdevice-xfce-vdevice_x86-64-20251104054519.rootfs.ext4,format=raw \
--device virtio-scsi-pci,id=scsi \
--device scsi-hd,drive=hd \
--smp 8 -m 4096 \
--nographic \
--vga none \
--device usb-tablet \
--netdev user,id=network0 -device virtio-net,netdev=network0 \
--usb -device usb-host,vendorid=0x0bb4,productid=0x0a5f \
--audiodev id=snd0,driver=none \
--device ich9-intel-hda -device hda-duplex,audiodev=snd0 \
--nic user,ipv6=off,model=e1000,id=network_0,net=10.0.8.0/24,hostfwd=tcp:127.0.0.1:5522-:22
-"""

@@ -482,9 +482,9 @@ body {
   /* Epic, readable display font with solid fallbacks */
   font-family: "Cinzel", "Cinzel Decorative", ui-serif, Georgia, "Times New Roman", serif;
 
-  /* Slightly increased again, still responsive (small screens -> large screens).
+  /* Slightly reduced (~0.1rem) while staying responsive (small screens -> large screens).
      Keep a conservative max to avoid pushing controls off-screen on short viewports. */
-  font-size: clamp(24px, 4.2vw, 28px);
+  font-size: clamp(22.4px, 4.05vw, 26.4px);
 
   font-weight: 800;
   letter-spacing: 1.2px;
