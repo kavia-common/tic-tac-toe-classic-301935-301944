@@ -484,7 +484,7 @@ body {
 
   /* Slightly reduced (~0.1rem) while staying responsive (small screens -> large screens).
      Keep a conservative max to avoid pushing controls off-screen on short viewports. */
-  font-size: clamp(20.8px, 4.05vw, 24.8px);
+  font-size: clamp(19.2px, 4.05vw, 23.2px);
 
   font-weight: 800;
   letter-spacing: 1.2px;
