@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './App.css';
 import drawSfx from './assets/draw.mp3';
@@ -475,6 +475,42 @@ export default function App() {
     }
   }, [seriesEnabled]);
 
+  /**
+   * IMPORTANT (TDZ fix):
+   * These callbacks are referenced by the global keyboard shortcuts effect below.
+   * They must be initialized before that effect runs during render, otherwise a
+   * temporal-dead-zone error can occur (e.g., "Cannot access 'toggleSound' before initialization").
+   */
+
+  const toggleSound = useCallback(() => {
+    setSoundOn((s) => !s);
+  }, []);
+
+  // PUBLIC_INTERFACE
+  const toggleTheme = useCallback(() => {
+    /** Toggle light/dark theme and persist the choice */
+    setTheme((th) => (th === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  // PUBLIC_INTERFACE
+  const handleRestart = useCallback(() => {
+    /** Reset the board to initial state (per-round restart; does not modify series state) */
+    const empty = Array(boardSize * boardSize).fill(null);
+    setSquares(empty);
+    setXIsNext(true);
+    setPendingAi(false);
+
+    // Clear per-round history (requirement: restart clears history; no persistence between rounds).
+    setHistory([{ squares: empty, move: null, xIsNext: true }]);
+    setCurrentHistoryIndex(0);
+
+    lastOutcomeRef.current = null;
+    prevOutcomeRef.current = null;
+    prevSeriesOutcomeRef.current = null;
+    // Confetti state is reset by effects when leaving win state.
+    try { if (typeof window !== 'undefined') { /* no-op placeholder */ } } catch {}
+  }, [boardSize]);
+
   // Global keyboard shortcuts:
   // - R: restart current round
   // - S: toggle sound
@@ -938,25 +974,6 @@ export default function App() {
     }
   }, [currentHistoryIndex, history]);
 
-  // PUBLIC_INTERFACE
-  function handleRestart() {
-    /** Reset the board to initial state (per-round restart; does not modify series state) */
-    const empty = Array(boardSize * boardSize).fill(null);
-    setSquares(empty);
-    setXIsNext(true);
-    setPendingAi(false);
-
-    // Clear per-round history (requirement: restart clears history; no persistence between rounds).
-    setHistory([{ squares: empty, move: null, xIsNext: true }]);
-    setCurrentHistoryIndex(0);
-
-    lastOutcomeRef.current = null;
-    prevOutcomeRef.current = null;
-    prevSeriesOutcomeRef.current = null;
-    // Confetti state is reset by effects when leaving win state.
-    try { if (typeof window !== 'undefined') { /* no-op placeholder */ } } catch {}
-  }
-
   function handleBoardSizeChange(e) {
     const nextSize = Number(e.target.value);
     if (![3, 4, 5].includes(nextSize)) return;
@@ -1085,8 +1102,6 @@ export default function App() {
     return false;
   };
 
-  const toggleSound = () => setSoundOn((s) => !s);
-
   useEffect(() => {
     try {
       localStorage.setItem('ttt-sound', soundOn ? 'on' : 'off');
@@ -1101,12 +1116,6 @@ export default function App() {
       {on ? '🔊' : '🔇'}
     </span>
   );
-
-  // PUBLIC_INTERFACE
-  function toggleTheme() {
-    /** Toggle light/dark theme and persist the choice */
-    setTheme((th) => (th === 'dark' ? 'light' : 'dark'));
-  }
 
   function handleLanguageChange(e) {
     const lng = e.target.value;
