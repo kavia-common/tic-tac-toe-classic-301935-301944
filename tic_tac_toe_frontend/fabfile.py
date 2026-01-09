@@ -8,7 +8,7 @@ load_dotenv()
 
 # ========== CONFIG ==========
 HOST = "kavia@121.244.192.84"        
-REMOTE_PATH = "~/qemu" # Or the path where your files are located on the server
+REMOTE_PATH = "~/qemu/av_image" # UPDATED: Path changed as requested
 # ============================
 
 # 1. Respond to login
@@ -18,11 +18,10 @@ auto_login = Responder(
 )
 
 # 2. Execute command sequence and power off
-# Detects the prompt "root@vdevicex86-64:~#" and sends the command string.
-# The ';' tells Linux: "run this, then this, then this..."
+# UPDATED: Runs RDKAVBufferTest, then powers off immediately.
 run_commands = Responder(
     pattern=r"root@vdevicex86-64:~#",
-    response="ls; touch kavia-test.txt; cd /usr/bin/; ls; poweroff\n",
+    response="/usr/bin/RDKAVBufferTest; poweroff\n",
 )
 
 @task
@@ -36,7 +35,7 @@ def build(c):
     else:
         print("❌ ERROR: REACT_APP_SSH_PASSWORD variable does not exist or is empty.")
         # Optional: print all keys to see what is available
-        print("Available variables:", list(os.environ.keys()))
+        # print("Available variables:", list(os.environ.keys()))
 
     conn = Connection(
         HOST,
@@ -49,15 +48,19 @@ def build(c):
     try:
         print(f"\n🚀 Launching QEMU in {REMOTE_PATH}...")
          
+        # UPDATED: New command provided by user
+        # Note: Using '-serial mon:stdio' allows Fabric to see the output 
+        # even if '-display vnc=:0' is used.
         qemu_cmd = (
             "qemu-system-x86_64 -kernel bzImage "
-            "-append \"console=ttyS0 root=/dev/sda video=1280x720\" "
-            "-drive if=none,id=hd,file=core-image-vdevice-xfce-vdevice_x86-64-20251104054519.rootfs.ext4,format=raw "
+            "-append \"video=1280x720 console=ttyS0 root=/dev/sda\" "
+            "-drive if=none,id=hd,file=core-image-vdevice-xfce-vdevice_x86-64-20260108060504.rootfs.ext4,format=raw "
             "-device virtio-scsi-pci,id=scsi "
             "-device scsi-hd,drive=hd "
+            "-serial mon:stdio "
             "-smp 8 -m 4096 "
-            "-nographic "
-            "-vga none "
+            "-display vnc=:0 "
+            "-vga std "
             "-device usb-tablet "
             "-netdev user,id=network0 -device virtio-net,netdev=network0 "
             "-usb -device usb-host,vendorid=0x0bb4,productid=0x0a5f "
@@ -66,7 +69,7 @@ def build(c):
             "-nic user,ipv6=off,model=e1000,id=network_0,net=10.0.8.0/24,hostfwd=tcp:127.0.0.1:5522-:22"
         )
 
-        print("👀 Waiting for emulator interactions...")
+        print("👀 Waiting for emulator interactions (Login -> RDKAVBufferTest -> Poweroff)...")
         
         # Add both watchers to the list
         conn.run(
