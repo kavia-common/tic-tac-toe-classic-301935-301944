@@ -22,7 +22,7 @@ auto_login = Responder(
 # The ';' tells Linux: "run this, then this, then this..."
 run_commands = Responder(
     pattern=r"root@vdevicex86-64:~#",
-    response="ls; cd /usr/bin/; ls; poweroff\n",
+    response="ls; touch kavia-test.txt; cd /usr/bin/; ls; poweroff\n",
 )
 
 @task
